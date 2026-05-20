@@ -120,7 +120,35 @@ These tools can return large payloads. Follow these rules to avoid context bloat
 - OHLCV capped at 500 bars, trades at 20 per request
 - Pine labels capped at 50 per study by default (pass `max_labels` to override)
 
-## Checklist Premarket — Flujo Automático
+## Flujo Premarket Unificado
+
+### Regla crítica — BB es el indicador primario
+
+> **Sin volatilidad no hay operaciones.** Si `bb.width` es muy estrecho en D1, H1 y M15 simultáneamente → NO operar ese día. Las MAs son contexto, no disparadores. BB manda sobre MAs.
+
+Pesos del análisis: **BB 50% | MAs 30% | Fundamental 20%** (este último es manual — verificar FED ±2 días y Earnings ±7 días antes de ejecutar cualquier operación).
+
+### Modos de operación
+
+| Trigger | Modo | Qué hace |
+|---------|------|----------|
+| "morning brief" | **Rápido** | `morning_brief` → bias D1/H1/M15 por ticker + estrategias candidatas. ~2 minutos. |
+| "checklist" / "ejecuta checklist premarket" / "analiza apertura" / "análisis premarket" / "prepara el análisis" | **Completo** | `morning_brief` → análisis 7 pasos → dibujar líneas → screenshots → estrategias → guardar reporte. ~15-20 minutos. |
+
+### Flujo completo (modo Checklist)
+
+```
+1. morning_brief              → recolecta datos D1/H1/M15 de todo el watchlist
+2. Análisis 7 pasos           → aplicar checklist por ticker usando los datos del paso 1
+3. Dibujar niveles            → draw_shape para BB Middle D1, BB Middle H1, Máx/Mín H1
+4. Captura                    → capture_screenshot por ticker
+5. Estrategias                → evaluar strategy_candidates del morning_brief
+6. Guardar reporte            → premarket_save con el análisis completo
+```
+
+**IMPORTANTE:** El paso 1 (`morning_brief`) recolecta todos los datos necesarios para los 7 pasos. No hacer llamadas adicionales a `data_get_study_values` por ticker — usar los datos del morning_brief.
+
+### Checklist Premarket — Flujo Automático
 
 **Trigger:** cuando el usuario escriba cualquiera de estas frases:
 - "ejecuta checklist premarket"
@@ -240,8 +268,19 @@ TICKER: AAPL
   Trendlines — Marcar manualmente en gráfico BB H1 conectando [máximos / mínimos]
   Bid/Ask    — Verificar spread y calcular strike manualmente antes de entrar
   Premarket  — Precio: $XXX | Apertura estimada: [Gap Up / Gap Down / Flat]
-  ESTRATEGIAS POSIBLES: [lista de STRAT-XX que aplican según condiciones detectadas]
+  ESTRATEGIAS POSIBLES:
+    conditions_met → [STRAT-XX CALL/PUT: descripción corta]
+    setup_forming  → [STRAT-XX CALL/PUT: qué falta para activarse]
+    watch          → [STRAT-XX CALL/PUT: condición a vigilar]
 ```
+
+### Paso final — Guardar reporte
+
+Al terminar el checklist completo de los 6 tickers, llamar:
+```
+premarket_save(content="[reporte completo en markdown]", date="YYYY-MM-DD")
+```
+El reporte se guarda en `docs/sessions/premarket-YYYY-MM-DD.md` dentro del repo.
 
 ### Reglas operativas
 - Verificar filtros globales: FED ±2 días hábiles / Earnings ±7 días por ticker
