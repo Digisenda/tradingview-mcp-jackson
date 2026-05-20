@@ -10,6 +10,7 @@ import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as chart from "./chart.js";
 import * as data from "./data.js";
+import { checkFundamentals } from "./fundamental.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "../../");
@@ -215,12 +216,18 @@ export async function runBrief({ rules_path } = {}) {
     );
   }
 
+  // Run fundamental filters in parallel with chart state fetch
+  const [fundamentalResult, chartState] = await Promise.allSettled([
+    checkFundamentals(watchlist, rules),
+    chart.getState(),
+  ]);
+  const fundamental_filters =
+    fundamentalResult.status === "fulfilled" ? fundamentalResult.value : null;
   let originalSymbol, originalTimeframe;
-  try {
-    const currentState = await chart.getState();
-    originalSymbol = currentState.symbol;
-    originalTimeframe = currentState.resolution;
-  } catch (_) {}
+  if (chartState.status === "fulfilled") {
+    originalSymbol = chartState.value?.symbol;
+    originalTimeframe = chartState.value?.resolution;
+  }
 
   const TIMEFRAMES = [
     { key: "D1", tf: "D" },
@@ -289,6 +296,7 @@ export async function runBrief({ rules_path } = {}) {
     success: true,
     generated_at: new Date().toISOString(),
     rules_loaded_from: loadedFrom,
+    fundamental_filters,
     rules: {
       bias_criteria: rules.bias_criteria || null,
       risk_rules: rules.risk_rules || null,
@@ -298,6 +306,7 @@ export async function runBrief({ rules_path } = {}) {
     symbols_scanned: results,
     instruction: [
       "ANÁLISIS PREMARKET — Aplica el checklist de 7 pasos por ticker usando los datos multi-timeframe.",
+      "FILTROS FUNDAMENTALES (verificar PRIMERO): Si fundamental_filters.fed.active=true → advertir NO operar hoy. Si fundamental_filters.earnings[ticker].active=true → advertir NO operar ese ticker. Mostrar fundamental_filters.warnings al inicio del reporte si hay alguno activo.",
       "REGLA CRÍTICA: BB es el indicador primario (50% peso). Si bb.width es muy estrecho en todos los TF = baja volatilidad = NO operar ese día.",
       "PASO 1 — BB D1: bb_position='above_middle' → Middle=PISO | 'below_middle' → Middle=TECHO. Anotar nivel bb.basis.",
       "PASO 2 — BB H1: evaluar bb_position H1. Middle H1 = punto de rebote intraday. Anotar si es techo o piso.",
