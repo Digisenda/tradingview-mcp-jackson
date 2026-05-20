@@ -2,6 +2,22 @@
   "watchlist": ["AAPL", "NVDA", "SPY", "QQQ", "IWM", "DIA"],
   "default_timeframe": "60",
 
+  "fundamental_filters": {
+    "_note": "Fallback dates used when Finviz scraping fails. Update quarterly.",
+    "fed_dates": [
+      "2026-06-18",
+      "2026-07-30",
+      "2026-09-17",
+      "2026-10-29",
+      "2026-12-10"
+    ],
+    "earnings": {
+      "AAPL": "2026-07-28",
+      "NVDA": "2026-08-27"
+    }
+  },
+
+
   "contract_rules": {
     "type": "CALL or PUT — directional only, no spreads",
     "expiration": "nearest weekly expiration",
