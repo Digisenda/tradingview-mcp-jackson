@@ -79,26 +79,62 @@ Conectar con una fuente de datos externa para eliminar la verificación manual d
 
 ---
 
-## FASE 4 — Dashboard / Visualización del Reporte ⏳ PENDIENTE
+## FASE 4 — Dashboard HTML Estático ✅ DISEÑO APROBADO — ⏳ IMPLEMENTACIÓN PENDIENTE
 
-> Fuente: `docs/DEPURACION MORNING_BRIEF.md` — ítem 5
+> Fuente: `docs/DEPURACION MORNING_BRIEF.md` — ítem 5  
+> Diseño aprobado: 2026-05-20. Referencia revisada: `github.com/Digisenda/dashboard-trading` (descartado por complejidad excesiva).
 
-### Objetivo
-Darle mayor visibilidad y usabilidad al reporte premarket diario. Actualmente es un bloque de texto Markdown sin jerarquía visual clara al momento de operación.
+### Decisión de diseño
 
-### Alcance (a definir)
-- **Opción A — Reporte HTML:** Generar versión HTML del premarket con colores por bias (verde/rojo/naranja), tabla de estrategias resaltada, niveles clave en bold
-- **Opción B — Terminal table:** Mejorar el output en consola con tablas ASCII y colores ANSI para leer directamente en Claude Code sin abrir archivo
-- **Opción C — Resumen de 3 líneas por ticker:** Cabecera compacta al inicio del reporte para lectura rápida antes del análisis detallado
+**Archivo HTML estático** generado automáticamente por `morning_brief` junto al `.md`.  
+Sin backend, sin Docker, sin auth. Se abre directo en el browser con un clic.
 
-### Prioridad de setup activo
-Asegurar que `conditions_met` aparezca siempre al tope del reporte, visible antes de cualquier otra cosa.
+**Descartado:** El proyecto `dashboard-trading` (React + FastAPI + PostgreSQL + Docker) es demasiado complejo para el objetivo — pantalla de operación de un vistazo.  
+**Rescatado de ese proyecto:** estilo dark + Tailwind CDN, calculadora BID/ASK del `Checklist.jsx`.
 
-### Checklist de implementación
-- [ ] Definir formato preferido (A, B o C)
-- [ ] Implementar en `savePremarketReport()` o como función separada
-- [ ] Probar lectura rápida en condiciones reales de mercado (9:30 AM bajo presión)
-- [ ] Iterar hasta que el setup activo sea visible en menos de 3 segundos de lectura
+### Layout aprobado — una sola pantalla, 3 zonas
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  SESIÓN: 09:31 ET  ●  ABIERTA  │  FED: OK  │ EARN: OK  │
+│  ⭐ SETUP ACTIVO: IWM STRAT-03 PUT — techo $279.28      │
+├──────────┬──────────┬──────────┬──────────┬─────────────┤
+│  AAPL    │  NVDA    │   SPY    │   QQQ    │   IWM  ★    │
+│  $299.82 │  $224.68 │  $738.05 │  $708.56 │  $277.85    │
+│  ALCISTA │  ALCISTA │  ALCISTA │  ALCISTA │  BAJISTA    │
+│  BB D1 ↑ │  BB D1 ↑ │  BB D1 ↑ │  BB D1 ↑ │  BB D1 ↓   │
+│  $285.61 │  $213.46 │  $728.13 │  $688.84 │  $279.28    │
+│  STRAT02 │  STRAT02 │  STRAT02 │  STRAT02 │  STRAT03 ★  │
+├──────────┴──────────┴──────────┴──────────┴─────────────┤
+│  DIA — ⚠️ NO OPERAR (BB width demasiado estrecho)        │
+├─────────────────────────────────────────────────────────┤
+│  [ Calculadora BID/ASK — MID / Stop / Target ]          │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Especificaciones técnicas
+
+| Aspecto | Decisión |
+|---------|---------|
+| Tecnología | HTML + CSS inline (Tailwind CDN) — sin build step |
+| Generación | `savePremarketReport()` genera `.md` + `.html` en `docs/sessions/` |
+| Apertura | Link en el reporte `.md` o tool `premarket_open` (por definir) |
+| Datos | Lee del output de `morning_brief` — reutiliza `fundamental_filters` |
+| Calculadora | BID/ASK pura JS (sin API) — rescatada de `dashboard-trading/Checklist.jsx` |
+| Prioridad visual | `conditions_met` siempre al tope en banner destacado |
+| Regla sin vol. | DIA o ticker con BB estrecho → banner "NO OPERAR" antes del grid |
+
+### Checklist de implementación (próxima sesión)
+
+- [ ] Crear función `generateHtml(briefData)` en `src/core/morning.js`
+- [ ] HTML template con Tailwind CDN, dark theme, layout de 3 zonas
+- [ ] Banner superior: hora ET + estado sesión + filtros FED/Earnings
+- [ ] Banner alerta roja/naranja si hay `conditions_met` activo
+- [ ] Grid de 6 cards (una por ticker) con bias, BB levels, setup candidates
+- [ ] Banner "NO OPERAR" para tickers con BB width estrecho en todos los TF
+- [ ] Calculadora BID/ASK en sección inferior (JS puro, sin API)
+- [ ] `savePremarketReport()` genera `.html` junto al `.md`
+- [ ] Probar apertura desde Claude Code y lectura en <3 segundos
 
 ---
 
@@ -146,7 +182,7 @@ pinecone.query(top_k=3) → contexto cualitativo al reporte
 | 1 | Unificación morning_brief + checklist (Etapas 1-3) | ✅ Completada |
 | 2 | Verificación end-to-end (BB + SMAs + checklist completo) | ✅ Completada |
 | 3 | Análisis Fundamental Automatizado (Finviz / FED / Earnings) | ✅ Completada |
-| 4 | Dashboard / Visualización del reporte | ⏳ Pendiente |
+| 4 | Dashboard HTML estático (generado por morning_brief) | ✅ Diseño aprobado — ⏳ Implementación pendiente |
 | 5 | Pinecone RAG Integration | ⏳ Pendiente — 4 preguntas previas |
 
-**Próxima fase recomendada:** Fase 3 (más impacto operativo inmediato) o Fase 5 si Juan responde las 4 preguntas del RAG.
+**Próxima sesión:** implementar Fase 4 (HTML dashboard). Fase 5 (Pinecone RAG) requiere 4 preguntas confirmadas — ver `docs/pinecone-rag-integration/PLAN.md`.
