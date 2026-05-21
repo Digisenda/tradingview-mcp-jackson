@@ -278,9 +278,17 @@ TICKER: AAPL
 
 Al terminar el checklist completo de los 6 tickers, llamar:
 ```
-premarket_save(content="[reporte completo en markdown]", date="YYYY-MM-DD")
+premarket_save(
+  content="[reporte completo en markdown]",
+  date="YYYY-MM-DD",
+  brief_data="[JSON.stringify del output completo de morning_brief]"
+)
 ```
-El reporte se guarda en `docs/sessions/premarket-YYYY-MM-DD.md` dentro del repo.
+El reporte se guarda en `docs/sessions/premarket-YYYY-MM-DD.md` y también genera
+`docs/sessions/premarket-YYYY-MM-DD.html` — dashboard estático que se puede abrir directo en el browser.
+
+**IMPORTANTE:** Pasar `brief_data` siempre — es el JSON del `morning_brief` completo
+(`symbols_scanned` + `fundamental_filters`). Esto genera el HTML automáticamente.
 
 ### Reglas operativas
 - Verificar filtros globales: FED ±2 días hábiles / Earnings ±7 días por ticker

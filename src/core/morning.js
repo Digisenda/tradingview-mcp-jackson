@@ -370,8 +370,291 @@ export function getSession({ date } = {}) {
   };
 }
 
-/** Save the full premarket checklist report as markdown in docs/sessions/ inside the repo. */
-export function savePremarketReport({ content, date } = {}) {
+/** Escape HTML special characters */
+function esc(str) {
+  return String(str ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+/** Generate a self-contained HTML dashboard from morning_brief structured data */
+export function generateHtml(briefData, date) {
+  const { fundamental_filters, symbols_scanned = [] } = briefData;
+  const dateStr = date || new Date().toISOString().split("T")[0];
+
+  // ── Fundamental status ───────────────────────────────────────────────────────
+  const fedActive = fundamental_filters?.fed?.active;
+  const fedLabel = fedActive ? "⚠️ FED HOY" : "✓ FED OK";
+  const fedCls = fedActive ? "text-red-400" : "text-green-400";
+
+  const earningsActive = Object.entries(fundamental_filters?.earnings || {})
+    .filter(([, v]) => v.active)
+    .map(([k]) => k);
+  const earnLabel = earningsActive.length
+    ? `⚠️ EARN: ${earningsActive.join(", ")}`
+    : "✓ EARN OK";
+  const earnCls = earningsActive.length ? "text-red-400" : "text-green-400";
+
+  const fundamentalWarnings = fundamental_filters?.warnings || [];
+
+  // ── Active setups ────────────────────────────────────────────────────────────
+  const activeSetups = [];
+  for (const sym of symbols_scanned) {
+    for (const cand of sym.strategy_candidates || []) {
+      if (cand.confidence === "conditions_met") {
+        activeSetups.push({ symbol: sym.symbol, ...cand });
+      }
+    }
+  }
+
+  // ── Helpers ──────────────────────────────────────────────────────────────────
+  function trendCls(order) {
+    if (!order) return "text-gray-400";
+    if (order === "alcista" || order === "mixto_alcista") return "text-green-400";
+    if (order === "bajista" || order === "mixto_bajista") return "text-red-400";
+    return "text-orange-400";
+  }
+  function trendLabel(order) {
+    const m = { alcista: "ALCISTA ↑", bajista: "BAJISTA ↓", entrelazado: "LATERAL ↔", mixto_alcista: "MIXTO ↑", mixto_bajista: "MIXTO ↓" };
+    return m[order] || order || "—";
+  }
+  function middleRole(pos) {
+    if (!pos) return "—";
+    if (pos === "above_middle" || pos === "above_upper") return "PISO";
+    if (pos === "below_middle" || pos === "below_lower") return "TECHO";
+    return "—";
+  }
+  function widthCls(w) {
+    if (w == null) return "text-gray-400";
+    if (w < 3) return "text-red-400 font-bold";
+    if (w < 6) return "text-orange-400";
+    return "text-gray-300";
+  }
+  function m15AlertLabel(pos) {
+    if (pos === "above_upper") return " ⚠️ sobre banda sup";
+    if (pos === "below_lower") return " ⚠️ bajo banda inf";
+    return "";
+  }
+  function confBadge(conf) {
+    if (conf === "conditions_met")
+      return `<span class="px-1 py-0.5 bg-orange-900 text-orange-300 text-xs rounded font-bold">ACTIVO</span>`;
+    if (conf === "setup_forming")
+      return `<span class="px-1 py-0.5 bg-yellow-900 text-yellow-300 text-xs rounded">SETUP</span>`;
+    return `<span class="px-1 py-0.5 bg-gray-800 text-gray-500 text-xs rounded">watch</span>`;
+  }
+
+  // ── Ticker cards ─────────────────────────────────────────────────────────────
+  const cards = symbols_scanned.map((sym) => {
+    const price = sym.quote?.last ?? sym.quote?.close;
+    const d1 = sym.timeframes?.D1 || {};
+    const h1 = sym.timeframes?.H1 || {};
+    const m15 = sym.timeframes?.M15 || {};
+
+    const hasActive = (sym.strategy_candidates || []).some((c) => c.confidence === "conditions_met");
+    const cardBorder = hasActive ? "border-orange-600" : "border-gray-800";
+    const symCls = hasActive ? "text-orange-400" : "text-white";
+
+    const d1MR = middleRole(d1.bb_position);
+    const d1MRCls = d1MR === "PISO" ? "text-green-400" : d1MR === "TECHO" ? "text-red-400" : "text-gray-400";
+    const h1MR = middleRole(h1.bb_position);
+    const h1MRCls = h1MR === "PISO" ? "text-green-400" : h1MR === "TECHO" ? "text-red-400" : "text-gray-400";
+
+    const tickerEarnings = fundamental_filters?.earnings?.[sym.symbol];
+    const earnWarnHtml = tickerEarnings?.active
+      ? `<div class="mt-1 text-xs text-red-400">⚠️ EARN ${esc(tickerEarnings.date)}</div>` : "";
+
+    const topStrats = [...(sym.strategy_candidates || [])]
+      .sort((a, b) => {
+        const o = { conditions_met: 0, setup_forming: 1, watch: 2 };
+        return (o[a.confidence] ?? 3) - (o[b.confidence] ?? 3);
+      })
+      .slice(0, 3);
+
+    const stratsHtml = topStrats.length
+      ? topStrats.map((s) => `
+          <div class="flex items-center gap-1 mt-1">
+            ${confBadge(s.confidence)}
+            <span class="text-xs text-gray-300">${esc(s.id)}</span>
+            <span class="text-xs font-bold ${s.position === "CALL" ? "text-green-400" : "text-red-400"}">${s.position}</span>
+          </div>`).join("")
+      : `<div class="text-xs text-gray-600 mt-1">Sin setup activo</div>`;
+
+    return `
+    <div class="rounded-lg p-3 border ${cardBorder}" style="background:#111827">
+      <div class="flex justify-between items-start mb-1">
+        <span class="font-bold ${symCls}">${esc(sym.symbol)}${hasActive ? " ⭐" : ""}</span>
+        <span class="font-bold text-white">$${price != null ? Number(price).toFixed(2) : "—"}</span>
+      </div>
+      <div class="text-xs font-bold mb-2 ${trendCls(d1.ma_order)}">${trendLabel(d1.ma_order)}</div>
+      <div class="space-y-1 text-xs text-gray-400">
+        <div class="flex justify-between">
+          <span>BB D1</span>
+          <span>${d1.bb?.basis != null ? "$" + d1.bb.basis.toFixed(2) : "—"} <span class="${d1MRCls}">${d1MR}</span></span>
+        </div>
+        <div class="flex justify-between">
+          <span>BB H1</span>
+          <span>${h1.bb?.basis != null ? "$" + h1.bb.basis.toFixed(2) : "—"} <span class="${h1MRCls}">${h1MR}</span></span>
+        </div>
+        <div class="flex justify-between">
+          <span>M15 width</span>
+          <span class="${widthCls(m15.bb?.width)}">${m15.bb?.width != null ? m15.bb.width.toFixed(2) : "—"}${m15AlertLabel(m15.bb_position)}</span>
+        </div>
+      </div>
+      ${earnWarnHtml}
+      <div class="mt-2 pt-2 border-t border-gray-800">${stratsHtml}</div>
+    </div>`;
+  }).join("\n");
+
+  // ── Banners ──────────────────────────────────────────────────────────────────
+  const fundamentalBanner = fundamentalWarnings.length
+    ? `<div class="rounded-lg p-3 mb-4 border border-red-700" style="background:#2d0a0a">
+        <div class="text-red-400 font-bold">⛔ RESTRICCIÓN ACTIVA — NO OPERAR</div>
+        ${fundamentalWarnings.map((w) => `<div class="text-red-300 text-sm">${esc(w)}</div>`).join("")}
+      </div>` : "";
+
+  const setupBanner = activeSetups.length
+    ? `<div class="rounded-lg p-3 mb-4 border border-orange-700" style="background:#2d1a00">
+        <div class="text-orange-400 font-bold text-sm mb-1">⭐ SETUP ACTIVO — CONFIRMAR ANTES DE ENTRAR</div>
+        ${activeSetups.map((s) => `
+        <div class="text-sm mt-1">
+          <span class="text-white font-bold">${esc(s.symbol)}</span>
+          <span class="text-orange-300 ml-2">${esc(s.id)}</span>
+          <span class="font-bold ml-2 ${s.position === "CALL" ? "text-green-400" : "text-red-400"}">${s.position}</span>
+          <span class="text-gray-400 ml-2 text-xs">${esc(s.note)}</span>
+        </div>`).join("")}
+      </div>` : "";
+
+  // ── Full HTML ─────────────────────────────────────────────────────────────────
+  return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premarket ${dateStr}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="min-h-screen p-4 font-mono text-gray-100" style="background:#030712">
+
+  <!-- BANNER SESIÓN -->
+  <div class="flex flex-wrap items-center justify-between rounded-lg p-3 mb-4 border border-gray-800" style="background:#111827">
+    <div>
+      <span class="text-gray-400 text-sm">PREMARKET</span>
+      <span class="text-white font-bold ml-2">${dateStr}</span>
+      <span class="text-gray-600 ml-4 text-sm" id="et-time">—</span>
+    </div>
+    <div class="flex gap-4 text-sm mt-1">
+      <span class="${fedCls} font-bold">${fedLabel}</span>
+      <span class="${earnCls} font-bold">${earnLabel}</span>
+      <span id="session-status" class="font-bold text-gray-400">—</span>
+    </div>
+  </div>
+
+  ${fundamentalBanner}${setupBanner}
+
+  <!-- GRID TICKERS -->
+  <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
+    ${cards}
+  </div>
+
+  <!-- CALCULADORA BID/ASK -->
+  <div class="rounded-lg p-4 border border-gray-800" style="background:#111827">
+    <div class="text-gray-400 text-sm font-bold mb-3">CALCULADORA BID/ASK</div>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+      <div>
+        <label class="text-xs text-gray-500 block mb-1">BID</label>
+        <input id="bid" type="number" step="0.01" min="0" placeholder="0.00"
+          class="w-full rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700" style="background:#1f2937"
+          oninput="calc()">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 block mb-1">ASK</label>
+        <input id="ask" type="number" step="0.01" min="0" placeholder="0.00"
+          class="w-full rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700" style="background:#1f2937"
+          oninput="calc()">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 block mb-1">CONTRATOS</label>
+        <input id="contracts" type="number" value="1" min="1" placeholder="1"
+          class="w-full rounded px-2 py-1.5 text-white text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 border border-gray-700" style="background:#1f2937"
+          oninput="calc()">
+      </div>
+      <div>
+        <label class="text-xs text-gray-500 block mb-1">INVERSIÓN</label>
+        <span id="inversion" class="block text-white text-sm mt-1.5 font-bold">—</span>
+      </div>
+    </div>
+    <div class="grid grid-cols-3 gap-3">
+      <div class="rounded p-2 text-center border border-gray-700" style="background:#1f2937">
+        <div class="text-xs text-gray-400 mb-1">MID</div>
+        <div id="mid" class="text-white font-bold text-lg">—</div>
+      </div>
+      <div class="rounded p-2 text-center border border-red-900" style="background:#1a0a0a">
+        <div class="text-xs text-red-400 mb-1">STOP −25%</div>
+        <div id="stop" class="text-red-400 font-bold text-lg">—</div>
+        <div id="stop-usd" class="text-xs text-red-500 mt-0.5">—</div>
+      </div>
+      <div class="rounded p-2 text-center border border-green-900" style="background:#0a1a0a">
+        <div class="text-xs text-green-400 mb-1">TARGET +12%</div>
+        <div id="target" class="text-green-400 font-bold text-lg">—</div>
+        <div id="target-usd" class="text-xs text-green-500 mt-0.5">—</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  (function () {
+    function updateClock() {
+      var now = new Date();
+      var et = new Date(now.toLocaleString('en-US', { timeZone: 'America/New_York' }));
+      var h = et.getHours(), m = et.getMinutes();
+      document.getElementById('et-time').textContent =
+        String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ' ET';
+      var tot = h * 60 + m;
+      var status = 'CERRADO', cls = 'text-gray-500';
+      if (tot >= 570 && tot < 690)      { status = '● VENTANA ACTIVA 9:30–11:30'; cls = 'text-green-400'; }
+      else if (tot >= 690 && tot < 960) { status = '○ MERCADO ABIERTO';           cls = 'text-yellow-400'; }
+      var el = document.getElementById('session-status');
+      el.textContent = status; el.className = 'font-bold ' + cls;
+    }
+    updateClock();
+    setInterval(updateClock, 30000);
+  })();
+
+  function calc() {
+    var bid       = parseFloat(document.getElementById('bid').value);
+    var ask       = parseFloat(document.getElementById('ask').value);
+    var contracts = parseInt(document.getElementById('contracts').value) || 1;
+    var clear = function() {
+      ['mid','stop','stop-usd','target','target-usd','inversion'].forEach(function(id){
+        document.getElementById(id).textContent = '—';
+      });
+    };
+    if (!bid || !ask || bid <= 0 || ask <= 0 || ask < bid) { clear(); return; }
+    var mid    = (bid + ask) / 2;
+    var stopPx = mid * 0.75;
+    var tgtPx  = mid * 1.12;
+    var inv    = mid * contracts * 100;
+    var slUsd  = (stopPx - mid) * contracts * 100;
+    var tpUsd  = (tgtPx  - mid) * contracts * 100;
+    var f = function(v){ return '$' + v.toFixed(2); };
+    var fu = function(v){ return (v >= 0 ? '+' : '') + '$' + Math.abs(v).toFixed(0); };
+    document.getElementById('mid').textContent        = f(mid);
+    document.getElementById('stop').textContent       = f(stopPx);
+    document.getElementById('stop-usd').textContent   = fu(slUsd) + ' (×' + contracts + ')';
+    document.getElementById('target').textContent     = f(tgtPx);
+    document.getElementById('target-usd').textContent = fu(tpUsd) + ' (×' + contracts + ')';
+    document.getElementById('inversion').textContent  = f(inv);
+  }
+</script>
+</body>
+</html>`;
+}
+
+/** Save the full premarket checklist report as markdown in docs/sessions/ inside the repo.
+ *  If brief_data (JSON string of morning_brief output) is provided, also generates an HTML dashboard. */
+export function savePremarketReport({ content, date, brief_data } = {}) {
   if (!content || typeof content !== "string") {
     throw new Error("content is required and must be a string.");
   }
@@ -380,8 +663,21 @@ export function savePremarketReport({ content, date } = {}) {
 
   const sessionsDir = join(PROJECT_ROOT, "docs", "sessions");
   mkdirSync(sessionsDir, { recursive: true });
-  const filePath = join(sessionsDir, `premarket-${dateStr}.md`);
-  writeFileSync(filePath, content, "utf8");
 
-  return { success: true, path: filePath, date: dateStr };
+  const mdPath = join(sessionsDir, `premarket-${dateStr}.md`);
+  writeFileSync(mdPath, content, "utf8");
+
+  let htmlPath = null;
+  if (brief_data) {
+    try {
+      const briefObj = typeof brief_data === "string" ? JSON.parse(brief_data) : brief_data;
+      const html = generateHtml(briefObj, dateStr);
+      htmlPath = join(sessionsDir, `premarket-${dateStr}.html`);
+      writeFileSync(htmlPath, html, "utf8");
+    } catch (e) {
+      // HTML generation is non-fatal — md already saved
+    }
+  }
+
+  return { success: true, path: mdPath, html_path: htmlPath, date: dateStr };
 }

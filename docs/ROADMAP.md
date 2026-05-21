@@ -79,7 +79,7 @@ Conectar con una fuente de datos externa para eliminar la verificación manual d
 
 ---
 
-## FASE 4 — Dashboard HTML Estático ✅ DISEÑO APROBADO — ⏳ IMPLEMENTACIÓN PENDIENTE
+## FASE 4 — Dashboard HTML Estático ✅ COMPLETADA
 
 > Fuente: `docs/DEPURACION MORNING_BRIEF.md` — ítem 5  
 > Diseño aprobado: 2026-05-20. Referencia revisada: `github.com/Digisenda/dashboard-trading` (descartado por complejidad excesiva).
@@ -124,17 +124,18 @@ Sin backend, sin Docker, sin auth. Se abre directo en el browser con un clic.
 | Prioridad visual | `conditions_met` siempre al tope en banner destacado |
 | Regla sin vol. | DIA o ticker con BB estrecho → banner "NO OPERAR" antes del grid |
 
-### Checklist de implementación (próxima sesión)
+### Implementación — 2026-05-21
 
-- [ ] Crear función `generateHtml(briefData)` en `src/core/morning.js`
-- [ ] HTML template con Tailwind CDN, dark theme, layout de 3 zonas
-- [ ] Banner superior: hora ET + estado sesión + filtros FED/Earnings
-- [ ] Banner alerta roja/naranja si hay `conditions_met` activo
-- [ ] Grid de 6 cards (una por ticker) con bias, BB levels, setup candidates
-- [ ] Banner "NO OPERAR" para tickers con BB width estrecho en todos los TF
-- [ ] Calculadora BID/ASK en sección inferior (JS puro, sin API)
-- [ ] `savePremarketReport()` genera `.html` junto al `.md`
-- [ ] Probar apertura desde Claude Code y lectura en <3 segundos
+- [x] `generateHtml(briefData, date)` en `src/core/morning.js`
+- [x] HTML template con Tailwind CDN, dark theme, layout de 3 zonas
+- [x] Banner superior: hora ET + estado sesión + filtros FED/Earnings (JS reloj en vivo)
+- [x] Banner naranja si hay `conditions_met` activo
+- [x] Grid de 6 cards (una por ticker) con bias, BB levels D1/H1, M15 width, setup candidates
+- [x] Card con borde naranja para tickers con setup activo
+- [x] Calculadora BID/ASK (MID, STOP -25%, TARGET +12%, inversión total)
+- [x] `savePremarketReport()` acepta `brief_data` (JSON string) y genera `.html` junto al `.md`
+- [x] `premarket_save` tool expone parámetro `brief_data`
+- [x] Dashboard generado y verificado: `docs/sessions/premarket-2026-05-21.html` (15 KB)
 
 ---
 
@@ -182,7 +183,7 @@ pinecone.query(top_k=3) → contexto cualitativo al reporte
 | 1 | Unificación morning_brief + checklist (Etapas 1-3) | ✅ Completada |
 | 2 | Verificación end-to-end (BB + SMAs + checklist completo) | ✅ Completada |
 | 3 | Análisis Fundamental Automatizado (Finviz / FED / Earnings) | ✅ Completada |
-| 4 | Dashboard HTML estático (generado por morning_brief) | ✅ Diseño aprobado — ⏳ Implementación pendiente |
+| 4 | Dashboard HTML estático (generado por morning_brief) | ✅ Completada — 2026-05-21 |
 | 5 | Pinecone RAG Integration | ⏳ Pendiente — 4 preguntas previas |
 
 **Próxima sesión:** implementar Fase 4 (HTML dashboard). Fase 5 (Pinecone RAG) requiere 4 preguntas confirmadas — ver `docs/pinecone-rag-integration/PLAN.md`.
