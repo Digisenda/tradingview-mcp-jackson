@@ -19,11 +19,15 @@ Built on top of the original [tradingview-mcp](https://github.com/tradesdontlie/
 
 | Feature | What it does |
 |---------|-------------|
-| `morning_brief` | One command that scans your watchlist, reads all your indicators, and returns structured data for Claude to generate your session bias |
+| `morning_brief` | One command that scans your watchlist across D1/H1/M15, reads BB + SMAs, and returns structured data + strategy candidates for Claude to apply the full 7-step premarket checklist |
 | `session_save` / `session_get` | Saves your daily brief to `~/.tradingview-mcp/sessions/` so you can compare today vs yesterday |
-| `rules.json` | Write your trading rules once — bias criteria, risk rules, watchlist. The morning brief applies them automatically every day |
+| `rules.json` | Write your trading rules once — watchlist, bias criteria, risk rules, strategies (STRAT-01 to 11), FED calendar, earnings dates. Applied automatically every day |
+| Fundamental filters | `morning_brief` auto-checks FED events (±2 business days) and earnings (±7 days) per ticker via `rules.json`. Warns before the analysis if any filter is active |
+| HTML dashboard | `premarket_save` generates a static `.html` dashboard alongside the `.md` report — opens in browser with one click. Shows ticker cards, BB levels, strategy badges, live ET clock, and a BID/ASK calculator (MID / STOP −25% / TARGET +12%) |
 | Launch bug fix | Fixed `tv_launch` compatibility with TradingView Desktop v2.14+ |
 | `tv brief` CLI | Run your morning brief from the terminal in one word |
+
+> **Digisenda fork additions (Fases 3 & 4):** fundamental filters and HTML dashboard are specific to this fork — not in the upstream LewisWJackson repo.
 
 ---
 
