@@ -285,10 +285,16 @@ premarket_save(
 )
 ```
 El reporte se guarda en `docs/sessions/premarket-YYYY-MM-DD.md` y también genera
-`docs/sessions/premarket-YYYY-MM-DD.html` — dashboard estático que se puede abrir directo en el browser.
+`docs/sessions/premarket-YYYY-MM-DD.html` — dashboard estático.
 
 **IMPORTANTE:** Pasar `brief_data` siempre — es el JSON del `morning_brief` completo
 (`symbols_scanned` + `fundamental_filters`). Esto genera el HTML automáticamente.
+
+**DESPUÉS de premarket_save exitoso:** abrir el dashboard en el browser con:
+```
+start docs\sessions\premarket-YYYY-MM-DD.html
+```
+Usar la fecha del reporte. Esto abre el dashboard automáticamente sin que el usuario tenga que pedirlo.
 
 ### Reglas operativas
 - Verificar filtros globales: FED ±2 días hábiles / Earnings ±7 días por ticker
