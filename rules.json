@@ -1,5 +1,5 @@
 {
-  "watchlist": ["AAPL", "NVDA", "SPY", "QQQ", "IWM", "DIA"],
+  "watchlist": ["AAPL", "NVDA", "SPY", "TSLA", "QQQ"],
   "default_timeframe": "60",
 
   "fundamental_filters": {
@@ -45,15 +45,10 @@
       "premium_range_limits":  { "min": 25, "max": 65 },
       "contracts_at_midpoint": 23
     },
-    "IWM": {
-      "premium_range_optimal": { "min": 40, "max": 70 },
-      "premium_range_limits":  { "min": 35, "max": 70 },
+    "TSLA": {
+      "premium_range_optimal": { "min": 80, "max": 160 },
+      "premium_range_limits":  { "min": 75, "max": 170 },
       "contracts_at_midpoint": 26
-    },
-    "DIA": {
-      "premium_range_optimal": { "min": 130, "max": 220 },
-      "premium_range_limits":  { "min": 120, "max": 230 },
-      "contracts_at_midpoint": 22
     }
   },
 

@@ -4,13 +4,15 @@
  * Returns structured multi-TF data + strategy candidates for Claude to apply
  * the full 7-step premarket checklist.
  */
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as chart from "./chart.js";
 import * as data from "./data.js";
 import { checkFundamentals } from "./fundamental.js";
+import { savePremarketSession } from "./supabase.js";
+import { removeOne } from "./drawing.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "../../");
@@ -558,6 +560,86 @@ export function generateHtml(briefData, date) {
     ${cards}
   </div>
 
+  <!-- LOG TRADE -->
+  <div class="rounded-lg p-4 border border-gray-800" style="background:#111827">
+    <div class="text-gray-400 text-sm font-bold mb-3">📝 LOG TRADE</div>
+    <form id="trade-form" onsubmit="submitTrade(event)">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">TICKER</label>
+          <select id="t-ticker" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+            ${symbols_scanned.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">ESTRATEGIA</label>
+          <select id="t-strategy" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+            <option>STRAT-01</option><option>STRAT-02</option><option>STRAT-03</option>
+            <option>STRAT-04</option><option>STRAT-05</option><option>STRAT-08</option>
+            <option>STRAT-09</option><option>STRAT-10</option><option>STRAT-11</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">LADO</label>
+          <select id="t-side" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+            <option value="CALL">CALL</option><option value="PUT">PUT</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">MODO</label>
+          <select id="t-mode" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+            <option value="paper">PAPER</option><option value="real">REAL</option>
+          </select>
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">STRIKE</label>
+          <input id="t-strike" type="number" step="0.5" placeholder="0.00" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">EXPIRACIÓN</label>
+          <input id="t-expiry" type="date" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">PRIMA ENTRADA</label>
+          <input id="t-entry" type="number" step="0.01" placeholder="0.00" oninput="calcResult()" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">PRIMA SALIDA</label>
+          <input id="t-exit" type="number" step="0.01" placeholder="0.00" oninput="calcResult()" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+        </div>
+        <div>
+          <label class="text-xs text-gray-500 block mb-1">CONTRATOS</label>
+          <input id="t-contracts" type="number" value="1" min="1" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mb-3">
+        <div class="rounded p-2 text-center border border-gray-700" style="background:#1f2937">
+          <div class="text-xs text-gray-400 mb-1">RESULTADO %</div>
+          <div id="t-result-display" class="font-bold text-lg text-gray-400">—</div>
+        </div>
+        <div class="col-span-2">
+          <label class="text-xs text-gray-500 block mb-1">NOTAS</label>
+          <input id="t-notes" type="text" placeholder="Contexto, setup, condiciones..." class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+        </div>
+      </div>
+      <button type="submit" class="w-full rounded py-2 text-sm font-bold text-white hover:opacity-90 transition" style="background:#2563eb">
+        GUARDAR TRADE
+      </button>
+    </form>
+    <div id="trade-msg" class="text-xs mt-2 text-center hidden"></div>
+  </div>
+
+  <!-- HISTORIAL RECIENTE -->
+  <div class="rounded-lg p-4 border border-gray-800" style="background:#111827">
+    <div class="flex justify-between items-center mb-3">
+      <div class="text-gray-400 text-sm font-bold">📊 HISTORIAL RECIENTE</div>
+      <button onclick="loadTrades()" class="text-xs text-blue-400 hover:text-blue-300">↻ Recargar</button>
+    </div>
+    <div id="trades-table" class="text-xs text-gray-500">Cargando...</div>
+  </div>
+
   <!-- CALCULADORA BID/ASK -->
   <div class="rounded-lg p-4 border border-gray-800" style="background:#111827">
     <div class="text-gray-400 text-sm font-bold mb-3">CALCULADORA BID/ASK</div>
@@ -647,14 +729,111 @@ export function generateHtml(briefData, date) {
     document.getElementById('target-usd').textContent = fu(tpUsd) + ' (×' + contracts + ')';
     document.getElementById('inversion').textContent  = f(inv);
   }
+
+  // ── Supabase trades ──────────────────────────────────────────────────────────
+  var SB_URL = 'https://iunxftxvazpfwqtygzcu.supabase.co';
+  var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1bnhmdHh2YXpwZndxdHlnemN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTI4MjgsImV4cCI6MjA5NTE4ODgyOH0.6Gmf-JIwHnLQwXNfjsFwogHXiRXdPxgP7vhVtvDK1ac';
+
+  function sbHeaders() {
+    return { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
+  }
+
+  function calcResult() {
+    var entry = parseFloat(document.getElementById('t-entry').value);
+    var exit  = parseFloat(document.getElementById('t-exit').value);
+    var el    = document.getElementById('t-result-display');
+    if (!entry || !exit || entry <= 0) { el.textContent = '—'; el.className = 'font-bold text-lg text-gray-400'; return; }
+    var pct = ((exit - entry) / entry) * 100;
+    el.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
+    el.className = 'font-bold text-lg ' + (pct >= 0 ? 'text-green-400' : 'text-red-400');
+  }
+
+  async function submitTrade(e) {
+    e.preventDefault();
+    var msg = document.getElementById('trade-msg');
+    var entry = parseFloat(document.getElementById('t-entry').value);
+    var exit  = parseFloat(document.getElementById('t-exit').value);
+    var resultPct = (entry && exit && entry > 0) ? ((exit - entry) / entry) * 100 : null;
+    var trade = {
+      date:          '${dateStr}',
+      ticker:        document.getElementById('t-ticker').value,
+      strategy:      document.getElementById('t-strategy').value,
+      side:          document.getElementById('t-side').value,
+      mode:          document.getElementById('t-mode').value,
+      strike:        parseFloat(document.getElementById('t-strike').value) || null,
+      expiration:    document.getElementById('t-expiry').value || null,
+      premium_entry: entry || null,
+      premium_exit:  exit  || null,
+      contracts:     parseInt(document.getElementById('t-contracts').value) || 1,
+      result_pct:    resultPct ? parseFloat(resultPct.toFixed(2)) : null,
+      notes:         document.getElementById('t-notes').value || null
+    };
+    try {
+      var res = await fetch(SB_URL + '/rest/v1/trades', {
+        method: 'POST', headers: Object.assign(sbHeaders(), { 'Prefer': 'return=minimal' }),
+        body: JSON.stringify(trade)
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      msg.textContent = '✅ Trade guardado';
+      msg.className = 'text-xs mt-2 text-center text-green-400';
+      msg.classList.remove('hidden');
+      document.getElementById('trade-form').reset();
+      document.getElementById('t-result-display').textContent = '—';
+      setTimeout(function(){ msg.classList.add('hidden'); }, 3000);
+      loadTrades();
+    } catch(err) {
+      msg.textContent = '❌ Error: ' + err.message;
+      msg.className = 'text-xs mt-2 text-center text-red-400';
+      msg.classList.remove('hidden');
+    }
+  }
+
+  async function loadTrades() {
+    var el = document.getElementById('trades-table');
+    try {
+      var res = await fetch(SB_URL + '/rest/v1/trades?select=date,ticker,strategy,side,mode,premium_entry,premium_exit,result_pct,notes&order=created_at.desc&limit=15', {
+        headers: sbHeaders()
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var trades = await res.json();
+      if (!trades.length) { el.innerHTML = '<p class="text-gray-600 text-center py-4">Sin trades registrados aún.</p>'; return; }
+      var rows = trades.map(function(t) {
+        var pct = t.result_pct != null ? t.result_pct : null;
+        var pctHtml = pct != null
+          ? '<span class="font-bold ' + (pct >= 0 ? 'text-green-400' : 'text-red-400') + '">' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%</span>'
+          : '<span class="text-gray-600">—</span>';
+        var modeBadge = t.mode === 'real'
+          ? '<span class="text-yellow-400 font-bold">REAL</span>'
+          : '<span class="text-gray-500">paper</span>';
+        return '<tr class="border-b border-gray-800 hover:bg-gray-800/30">'
+          + '<td class="py-1.5 pr-3 text-gray-400">' + t.date + '</td>'
+          + '<td class="py-1.5 pr-3 font-bold text-white">' + t.ticker + '</td>'
+          + '<td class="py-1.5 pr-3 text-gray-400">' + t.strategy + '</td>'
+          + '<td class="py-1.5 pr-3 ' + (t.side === 'CALL' ? 'text-green-400' : 'text-red-400') + ' font-bold">' + t.side + '</td>'
+          + '<td class="py-1.5 pr-3">' + pctHtml + '</td>'
+          + '<td class="py-1.5 pr-3">' + modeBadge + '</td>'
+          + '<td class="py-1.5 text-gray-500 truncate max-w-xs">' + (t.notes || '') + '</td>'
+          + '</tr>';
+      }).join('');
+      el.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-600 text-left border-b border-gray-800">'
+        + '<th class="pb-1 pr-3">FECHA</th><th class="pb-1 pr-3">TICKER</th><th class="pb-1 pr-3">STRAT</th>'
+        + '<th class="pb-1 pr-3">LADO</th><th class="pb-1 pr-3">RESULT</th><th class="pb-1 pr-3">MODO</th><th class="pb-1">NOTAS</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    } catch(err) {
+      el.innerHTML = '<p class="text-red-500 text-xs">Error cargando trades: ' + err.message + '</p>';
+    }
+  }
+
+  window.addEventListener('load', loadTrades);
 </script>
 </body>
 </html>`;
 }
 
 /** Save the full premarket checklist report as markdown in docs/sessions/ inside the repo.
+ *  Also saves to Supabase (premarket_sessions table) if configured.
  *  If brief_data (JSON string of morning_brief output) is provided, also generates an HTML dashboard. */
-export function savePremarketReport({ content, date, brief_data } = {}) {
+export async function savePremarketReport({ content, date, brief_data } = {}) {
   if (!content || typeof content !== "string") {
     throw new Error("content is required and must be a string.");
   }
@@ -668,9 +847,10 @@ export function savePremarketReport({ content, date, brief_data } = {}) {
   writeFileSync(mdPath, content, "utf8");
 
   let htmlPath = null;
+  let briefObj = null;
   if (brief_data) {
     try {
-      const briefObj = typeof brief_data === "string" ? JSON.parse(brief_data) : brief_data;
+      briefObj = typeof brief_data === "string" ? JSON.parse(brief_data) : brief_data;
       const html = generateHtml(briefObj, dateStr);
       htmlPath = join(sessionsDir, `premarket-${dateStr}.html`);
       writeFileSync(htmlPath, html, "utf8");
@@ -679,5 +859,63 @@ export function savePremarketReport({ content, date, brief_data } = {}) {
     }
   }
 
-  return { success: true, path: mdPath, html_path: htmlPath, date: dateStr };
+  // Persistir en Supabase (no bloquea si falla)
+  const sbResult = await savePremarketSession(dateStr, content, briefObj).catch(() => ({ saved: false }));
+
+  return {
+    success: true,
+    path: mdPath,
+    html_path: htmlPath,
+    date: dateStr,
+    supabase: sbResult,
+  };
+}
+
+// ─── Drawn lines tracking ─────────────────────────────────────────────────────
+
+const DRAWN_LINES_FILE = join(PROJECT_ROOT, "docs", "sessions", "drawn-lines.json");
+
+/**
+ * Guarda los entity IDs de las líneas dibujadas por Claude en esta sesión.
+ * Se llama AL FINAL del checklist con todas las IDs creadas.
+ */
+export function saveDrawnLines(entityIds = []) {
+  mkdirSync(join(PROJECT_ROOT, "docs", "sessions"), { recursive: true });
+  writeFileSync(DRAWN_LINES_FILE, JSON.stringify({ ids: entityIds, saved_at: new Date().toISOString() }), "utf8");
+  return { success: true, saved: entityIds.length };
+}
+
+/**
+ * Elimina SOLO las líneas que Claude dibujó en la sesión anterior (por entity ID guardado).
+ * NO toca las líneas manuales del usuario.
+ * Se llama AL INICIO del checklist, antes de dibujar nuevas líneas.
+ */
+export async function clearDrawnLines() {
+  if (!existsSync(DRAWN_LINES_FILE)) {
+    return { success: true, deleted: 0, note: "No hay líneas previas guardadas" };
+  }
+
+  let ids = [];
+  try {
+    const parsed = JSON.parse(readFileSync(DRAWN_LINES_FILE, "utf8"));
+    ids = parsed.ids || [];
+  } catch {
+    return { success: true, deleted: 0, note: "Archivo de líneas inválido — ignorado" };
+  }
+
+  let deleted = 0;
+  const errors = [];
+  for (const id of ids) {
+    try {
+      await removeOne({ entity_id: id });
+      deleted++;
+    } catch (e) {
+      errors.push(id); // La línea ya no existía — no es error crítico
+    }
+  }
+
+  // Limpiar el archivo después de borrar
+  try { unlinkSync(DRAWN_LINES_FILE); } catch {}
+
+  return { success: true, deleted, skipped: errors.length, note: `${deleted} líneas previas eliminadas` };
 }

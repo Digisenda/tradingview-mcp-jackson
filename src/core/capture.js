@@ -5,6 +5,7 @@ import { getClient, evaluate, getChartCollection } from "../connection.js";
 import { writeFileSync, mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
+import { saveScreenshot as sbSaveScreenshot } from "./supabase.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SCREENSHOT_DIR = join(dirname(dirname(__dirname)), "screenshots");
@@ -87,13 +88,26 @@ export async function captureScreenshot({ region, filename, method } = {}) {
   if (clip) params.clip = clip;
 
   const { data } = await client.Page.captureScreenshot(params);
-  writeFileSync(filePath, Buffer.from(data, "base64"));
+  const imgBuffer = Buffer.from(data, "base64");
+  writeFileSync(filePath, imgBuffer);
+
+  // Subir a Supabase Storage en background (no bloquea si falla)
+  const dateStr = new Date().toISOString().split("T")[0];
+  const tickerMatch = fname.match(/(?:premarket-\d{4}-\d{2}-\d{2}-)?([A-Z0-9]+)/);
+  const ticker = tickerMatch ? tickerMatch[1] : "UNKNOWN";
+  sbSaveScreenshot({
+    date: dateStr,
+    ticker,
+    filename: fname,
+    localPath: filePath,
+    sizeBytes: imgBuffer.length,
+  }).catch(() => {}); // silencioso si Supabase no está configurado
 
   return {
     success: true,
     method: "cdp",
     file_path: filePath,
     region,
-    size_bytes: Buffer.from(data, "base64").length,
+    size_bytes: imgBuffer.length,
   };
 }

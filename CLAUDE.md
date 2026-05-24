@@ -138,15 +138,21 @@ Pesos del análisis: **BB 50% | MAs 30% | Fundamental 20%** (este último es man
 ### Flujo completo (modo Checklist)
 
 ```
+0. drawn_lines_clear          → elimina SOLO las líneas de Claude del día anterior (no toca líneas manuales)
+R. trades_get(10)             → retroalimentación: leer últimos trades antes de analizar (ver sección Retroalimentación)
 1. morning_brief              → recolecta datos D1/H1/M15 de todo el watchlist
 2. Análisis 7 pasos           → aplicar checklist por ticker usando los datos del paso 1
 3. Dibujar niveles            → draw_shape para BB Middle D1, BB Middle H1, Máx/Mín H1
 4. Captura                    → capture_screenshot por ticker
 5. Estrategias                → evaluar strategy_candidates del morning_brief
 6. Guardar reporte            → premarket_save con el análisis completo
+7. drawn_lines_save([...ids]) → guarda todos los entity IDs creados en el paso 3
+8. Cierre de sesión           → preguntar al usuario si ejecutó operaciones (ver sección Cierre)
 ```
 
 **IMPORTANTE:** El paso 1 (`morning_brief`) recolecta todos los datos necesarios para los 7 pasos. No hacer llamadas adicionales a `data_get_study_values` por ticker — usar los datos del morning_brief.
+
+**IMPORTANTE drawn_lines:** Nunca usar `draw_clear` en el checklist. Solo `drawn_lines_clear` al inicio y `drawn_lines_save` al final. Recopilar TODOS los entity_ids retornados por `draw_shape` durante el paso 3 para pasarlos a `drawn_lines_save`.
 
 ### Checklist Premarket — Flujo Automático
 
@@ -178,6 +184,7 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
     chart_set_timeframe("D")
     data_get_study_values() → verificar que BB y las 4 SMAs están presentes.
     Si falta alguno → chart_manage_indicator para agregarlo.
+    ⚠️ NO llamar draw_clear aquí — las líneas anteriores ya fueron eliminadas por drawn_lines_clear al inicio del checklist.
 
   PASO 1 — Bollinger Bands D1  [peso 50%]
     (ya en D1 desde PASO 0)
@@ -274,15 +281,20 @@ TICKER: AAPL
     watch          → [STRAT-XX CALL/PUT: condición a vigilar]
 ```
 
-### Paso final — Guardar reporte
+### Paso final — Guardar reporte y líneas
 
-Al terminar el checklist completo de los 6 tickers, llamar:
+Al terminar el checklist completo de los 6 tickers, llamar en este orden:
 ```
-premarket_save(
-  content="[reporte completo en markdown]",
-  date="YYYY-MM-DD",
-  brief_data="[JSON.stringify del output completo de morning_brief]"
-)
+1. premarket_save(
+     content="[reporte completo en markdown]",
+     date="YYYY-MM-DD",
+     brief_data="[JSON.stringify del output completo de morning_brief]"
+   )
+
+2. drawn_lines_save(
+     entity_ids=["id1", "id2", ...]  ← todos los IDs retornados por draw_shape durante el checklist
+   )
+```
 ```
 El reporte se guarda en `docs/sessions/premarket-YYYY-MM-DD.md` y también genera
 `docs/sessions/premarket-YYYY-MM-DD.html` — dashboard estático.
@@ -295,6 +307,47 @@ El reporte se guarda en `docs/sessions/premarket-YYYY-MM-DD.md` y también gener
 start docs\sessions\premarket-YYYY-MM-DD.html
 ```
 Usar la fecha del reporte. Esto abre el dashboard automáticamente sin que el usuario tenga que pedirlo.
+
+### Retroalimentación — Paso R (antes del morning_brief)
+
+Llamar `trades_get(10)` y analizar los resultados antes de iniciar el análisis del día.
+
+**Qué evaluar:**
+- Win rate últimos 7 días por estrategia → si una estrategia tiene ≤30% win rate en la semana, marcarla como `baja confianza` en el reporte del día
+- Win rate por ticker → tickers con pérdidas consecutivas recientes = más cautela
+- Patrón BB M15 width + gap direction → si hay datos suficientes, ajustar prioridad de estrategias
+
+**Formato del bloque de retroalimentación** (mostrar antes del análisis):
+
+```
+## 🔄 Retroalimentación (últimos N trades)
+Win rate general: X/N (XX%)
+| Ticker | Strat | Lado | Resultado | Modo |
+|--------|-------|------|-----------|------|
+| AAPL   | S-02  | CALL | +12%      | real |
+...
+⚠️ Alertas: [ej. "STRAT-02 PUT: 0/3 esta semana → baja confianza hoy"]
+✅ Patrones confirmados: [ej. "BB M15 estrecho + gap up → CALL efectivo (2/2)"]
+```
+
+Si `trades_get` retorna 0 trades → omitir el bloque y continuar sin retroalimentación.
+
+---
+
+### Cierre de Sesión — Paso 8 (después de drawn_lines_save)
+
+Al terminar el checklist, preguntar siempre:
+
+> "¿Ejecutaste alguna operación hoy o ayer? Si me das los datos la registro en Supabase para el historial.
+> Necesito: **ticker · estrategia · CALL/PUT · prima entrada · prima salida · real o paper**
+> (strike y notas son opcionales)"
+
+Si el usuario da los datos → llamar `trade_save(...)` con ellos.
+Si dice "no operé" o no responde → continuar sin registrar.
+
+**No insistir más de una vez.** Si el usuario ya registró via el dashboard HTML → no duplicar.
+
+---
 
 ### Reglas operativas
 - Verificar filtros globales: FED ±2 días hábiles / Earnings ±7 días por ticker
