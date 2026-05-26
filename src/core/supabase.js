@@ -212,7 +212,7 @@ export async function getOpenPositions() {
   try {
     const { data, error } = await sb
       .from("trades")
-      .select("id, date, entry_date, ticker, strategy, side, strike, expiration, premium_entry, contracts, mode, signal_id, notes")
+      .select("id, date, entry_date, ticker, strategy, side, strike, expiration, premium_entry, contracts, mode, signal_code, notes")
       .eq("status", "open")
       .order("entry_date", { ascending: false });
 
@@ -236,7 +236,7 @@ export async function getRecentTrades(limit = 10) {
     const { data, error } = await sb
       .from("trades")
       .select("date, entry_date, exit_date, ticker, strategy, side, result_pct, mode, status, notes")
-      .in("status", ["closed", null])          // incluye trades legacy sin status
+      .or("status.eq.closed,status.is.null")   // incluye trades legacy sin status (NULL IN (...) = NULL en SQL, no TRUE)
       .order("created_at", { ascending: false })
       .limit(limit);
 

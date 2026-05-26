@@ -954,7 +954,9 @@ export function generateHtml(briefData, date) {
           + '<td class="py-1.5 pr-2 text-gray-500">' + (p.entry_date||'—') + ' <span class="text-orange-400">(+' + daysOpen + 'd)</span></td>'
           + '<td class="py-1.5 pr-2">' + sigHtml + '</td>'
           + '<td class="py-1.5">'
-          + '<button onclick="prefillClosePosition(\'' + p.id + '\',\'' + (p.ticker||'') + '\',\'' + (p.side||'') + '\',' + (p.premium_entry||0) + ',' + (p.contracts||1) + ',\'' + (p.signal_code||'') + '\')"'
+          + '<button onclick="handleCloseBtn(this)"'
+          + ' data-id="' + p.id + '" data-ticker="' + (p.ticker||'') + '" data-side="' + (p.side||'') + '"'
+          + ' data-entry="' + (p.premium_entry||0) + '" data-ctos="' + (p.contracts||1) + '" data-sig="' + (p.signal_code||'') + '"'
           + ' class="px-2 py-0.5 rounded text-xs font-bold text-white hover:opacity-80" style="background:#b45309">Cerrar</button>'
           + '</td>'
           + '</tr>';
@@ -995,6 +997,17 @@ export function generateHtml(briefData, date) {
     msg.classList.remove('hidden');
     document.getElementById('trade-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
     calcResult();
+  }
+
+  function handleCloseBtn(btn) {
+    prefillClosePosition(
+      btn.dataset.id,
+      btn.dataset.ticker,
+      btn.dataset.side,
+      parseFloat(btn.dataset.entry) || 0,
+      parseInt(btn.dataset.ctos) || 1,
+      btn.dataset.sig || ''
+    );
   }
 
   window.addEventListener('load', function() { loadTrades(); loadOpenPositions(); });
@@ -1075,11 +1088,11 @@ export function generateHtml(briefData, date) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ image_base64: base64, media_type: _schwabFile.type || 'image/png' }),
-        signal: AbortSignal.timeout(30000)
+        signal: AbortSignal.timeout(45000)
       });
-      if (!resp.ok) throw new Error('HTTP ' + resp.status);
-      var result = await resp.json();
-      if (!result.success) throw new Error(result.error || 'Error desconocido');
+      var result;
+      try { result = await resp.json(); } catch { throw new Error('HTTP ' + resp.status + ' (sin detalle)'); }
+      if (!resp.ok || !result.success) throw new Error(result.error || 'HTTP ' + resp.status);
       _schwabData = result.fields;
       showExtractedFields(_schwabData);
       status.textContent = '✓ Análisis completo';
@@ -1174,12 +1187,19 @@ export function generateHtml(briefData, date) {
     var f = _schwabData;
     if (!f) return;
 
-    function setSelect(id, val) {
+    function setSelect(id, val, addIfMissing) {
       var s = document.getElementById(id);
       if (!s || val == null) return;
       var v = String(val);
       for (var i = 0; i < s.options.length; i++) {
         if (s.options[i].value === v || s.options[i].text === v) { s.selectedIndex = i; return; }
+      }
+      // Opción no encontrada: agregar dinámicamente si se permite
+      if (addIfMissing) {
+        var opt = document.createElement('option');
+        opt.value = v; opt.text = v;
+        s.insertBefore(opt, s.options[0]);
+        s.selectedIndex = 0;
       }
     }
 
@@ -1188,7 +1208,7 @@ export function generateHtml(briefData, date) {
     var signalCode   = picked ? picked.value                       : '';
     var strategyPicked = picked ? picked.dataset.strategy          : '';
 
-    setSelect('t-ticker', f.ticker);
+    setSelect('t-ticker', f.ticker, true);   // addIfMissing=true — SPY, TSLA, etc. pueden no estar en el watchlist
     setSelect('t-side',   f.side);
     setSelect('t-mode',   f.mode || 'real');
     if (f.strike      != null) document.getElementById('t-strike').value    = f.strike;

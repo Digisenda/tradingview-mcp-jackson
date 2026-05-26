@@ -38,40 +38,43 @@ try {
 const PORT = 9224;
 const API_KEY = process.env.ANTHROPIC_API_KEY;
 
-// ─── Prompt para Claude Haiku Vision ─────────────────────────────────────────
-const ANALYSIS_PROMPT = `Eres un extractor de datos de capturas de pantalla del historial de operaciones de Charles Schwab (opciones).
+// ─── Tool schema (fuerza JSON estructurado — más robusto que pedir JSON en el prompt) ────
+const EXTRACT_TOOL = {
+  name: "extract_schwab_trade",
+  description: "Extrae los campos de la operación de opciones de la captura del historial de Charles Schwab. Llama esta función siempre que veas transacciones BOT/SOLD/BUY/SELL de opciones.",
+  input_schema: {
+    type: "object",
+    properties: {
+      ticker:        { type: "string",  description: "Símbolo del subyacente (NVDA, AAPL, SPY...)" },
+      side:          { type: "string",  enum: ["CALL", "PUT"] },
+      strike:        { type: "number",  description: "Precio de ejercicio de la opción" },
+      expiration:    { type: "string",  description: "Fecha de expiración YYYY-MM-DD" },
+      contracts:     { type: "integer", description: "Número de contratos (siempre positivo)" },
+      status:        { type: "string",  enum: ["open", "closed", "exit_only"] },
+      entry_date:    { type: ["string", "null"], description: "Fecha entrada YYYY-MM-DD. null si solo hay SOLD." },
+      premium_entry: { type: ["number", "null"], description: "Prima de compra (BOT/@precio). null si solo hay SOLD." },
+      exit_date:     { type: ["string", "null"], description: "Fecha salida YYYY-MM-DD. null si solo hay BOT." },
+      premium_exit:  { type: ["number", "null"], description: "Prima de venta (SOLD/@precio). null si solo hay BOT." },
+      result_pct:    { type: ["number", "null"], description: "((premium_exit - premium_entry) / premium_entry * 100). null si no hay ambas primas." },
+      mode:          { type: "string",  description: "Siempre 'real' para capturas de Schwab real." },
+    },
+    required: ["ticker", "side", "strike", "expiration", "contracts", "status", "mode"],
+  },
+};
 
-La pantalla puede mostrar 1 o 2 transacciones del mismo contrato de opción:
-- "BOT" o "BUY" con número POSITIVO (+18) = COMPRA = entrada de la posición
-- "SOLD" o "SELL" con número NEGATIVO (-18) = VENTA = cierre de la posición
+const ANALYSIS_PROMPT = `Eres un extractor de datos del historial de operaciones de Charles Schwab (opciones).
 
-REGLAS CRÍTICAS — léelas despacio:
-1. BOT/BUY → SIEMPRE es "premium_entry". SOLD/SELL → SIEMPRE es "premium_exit". NUNCA al revés.
-2. El número de contratos es el valor ABSOLUTO del prefijo: "+18" o "-18" → 18 contratos.
-3. La prima está después del "@": "@1.80" → 1.80, "@.02" → 0.02.
-4. Si ves BOT + SOLD del mismo strike y expiración → status="closed". Calcula result_pct=((premium_exit - premium_entry) / premium_entry * 100) redondeado a 2 decimales.
-5. Si solo ves BOT → status="open". premium_exit=null, exit_date=null, result_pct=null.
-6. Si solo ves SOLD → status="exit_only". premium_entry=null, entry_date=null, result_pct=null.
-7. Las fechas: "05/21/26" → "2026-05-21". La fecha del BOT es entry_date, la del SOLD es exit_date.
-8. El ticker es el símbolo del subyacente (NVDA, AAPL, SPY...), no el símbolo de la opción.
+Analiza la imagen y llama a extract_schwab_trade con los datos que encuentres.
 
-Retorna SOLO este JSON exacto (sin markdown, sin explicación, sin texto adicional):
-{
-  "ticker": "símbolo del subyacente",
-  "side": "CALL o PUT",
-  "strike": número,
-  "expiration": "YYYY-MM-DD",
-  "contracts": número entero positivo,
-  "status": "open | closed | exit_only",
-  "entry_date": "YYYY-MM-DD o null",
-  "premium_entry": número o null,
-  "exit_date": "YYYY-MM-DD o null",
-  "premium_exit": número o null,
-  "result_pct": número o null,
-  "mode": "real"
-}`;
+REGLAS CRÍTICAS:
+1. BOT/BUY con número POSITIVO (+18) = COMPRA = entry. premium_entry = precio después del "@". entry_date = fecha de esa fila.
+2. SOLD/SELL con número NEGATIVO (-18) = VENTA = exit. premium_exit = precio después del "@". exit_date = fecha de esa fila.
+3. Contratos = valor ABSOLUTO del prefijo: "+18" o "-18" → 18.
+4. Fechas: "05/21/26" → "2026-05-21".
+5. status: BOT+SOLD del mismo contrato → "closed" | solo BOT → "open" | solo SOLD → "exit_only".
+6. result_pct SOLO si status="closed": ((premium_exit - premium_entry) / premium_entry * 100), 2 decimales.`;
 
-// ─── Claude Vision — extraer campos de captura Schwab ─────────────────────────
+// ─── Claude Vision — extraer campos de captura Schwab (tool_use) ──────────────
 async function analyzeWithClaude(imageBase64, mediaType) {
   if (!API_KEY) throw new Error("ANTHROPIC_API_KEY no configurada en el entorno");
 
@@ -85,6 +88,8 @@ async function analyzeWithClaude(imageBase64, mediaType) {
     body: JSON.stringify({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 1024,
+      tools: [EXTRACT_TOOL],
+      tool_choice: { type: "tool", name: "extract_schwab_trade" },
       messages: [
         {
           role: "user",
@@ -102,18 +107,21 @@ async function analyzeWithClaude(imageBase64, mediaType) {
 
   if (!response.ok) {
     const errText = await response.text();
-    throw new Error(`Claude API ${response.status}: ${errText.slice(0, 200)}`);
+    throw new Error(`Claude API ${response.status}: ${errText.slice(0, 300)}`);
   }
 
   const data = await response.json();
-  const text = data.content?.[0]?.text || "";
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error(`Respuesta inesperada de Claude: ${text.slice(0, 200)}`);
 
-  const fields = JSON.parse(match[0]);
+  // Con tool_use, el resultado está en content[].input del tool_use block
+  const toolBlock = data.content?.find((b) => b.type === "tool_use" && b.name === "extract_schwab_trade");
+  if (!toolBlock) {
+    const fallbackText = data.content?.find((b) => b.type === "text")?.text || JSON.stringify(data).slice(0, 200);
+    throw new Error(`Claude no detectó una captura de Schwab válida. ${fallbackText.slice(0, 150)}`);
+  }
 
-  // Validación y corrección del server-side
-  // Si Claude calculó result_pct mal o no lo calculó, lo recalculamos
+  const fields = toolBlock.input;
+
+  // Corrección server-side: recalcular result_pct por seguridad
   if (fields.status === "closed" && fields.premium_entry != null && fields.premium_exit != null) {
     const calculated = ((fields.premium_exit - fields.premium_entry) / fields.premium_entry) * 100;
     fields.result_pct = Math.round(calculated * 100) / 100;
@@ -121,6 +129,9 @@ async function analyzeWithClaude(imageBase64, mediaType) {
 
   // Contratos siempre positivo
   if (fields.contracts != null) fields.contracts = Math.abs(fields.contracts);
+
+  // mode default
+  if (!fields.mode) fields.mode = "real";
 
   return fields;
 }
