@@ -197,15 +197,30 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
     ⚠️ Solo dibujar si tiene tendencia (alcista o bajista). Si LATERAL → NO dibujar.
     draw_shape(horizontal_line, precio=BB_middle_D) → "BB D [TECHO/PISO]"
 
-  PASO 2 — BB M15: Líneas de referencia en disipadores  [referencia visual apertura]
+  PASO 2 — BB M15: Proyección diagonal en disipadores  [referencia visual apertura]
     chart_set_timeframe("15")
-    data_get_study_values() → leer BB upper y BB lower en M15
-    Evaluar dirección de cada banda (siguiendo la tendencia del gráfico M15):
-      - Banda superior → draw_shape(trend_line) diagonal, color blanco
-      - Banda inferior → draw_shape(trend_line) diagonal, color blanco
+    data_get_ohlcv(count: 3) → leer últimas 3 barras M15 para calcular pendiente de cada banda
+    data_get_study_values() → leer BB upper y BB lower actuales en M15
+
+    Calcular pendiente actual de cada banda:
+      pendiente_upper = BB_upper_barra_actual - BB_upper_barra_anterior
+      pendiente_lower = BB_lower_barra_actual - BB_lower_barra_anterior
+
+    Trazar proyección hacia adelante (desde barra actual → ~10-15 barras futuras):
+      punto_inicio_upper = { precio: BB_upper_actual, tiempo: ahora }
+      punto_fin_upper    = { precio: BB_upper_actual + (pendiente_upper × 10), tiempo: ahora + 10 barras }
+      draw_shape(trend_line, point=punto_inicio_upper, point2=punto_fin_upper, color=blanco)
+
+      punto_inicio_lower = { precio: BB_lower_actual, tiempo: ahora }
+      punto_fin_lower    = { precio: BB_lower_actual + (pendiente_lower × 10), tiempo: ahora + 10 barras }
+      draw_shape(trend_line, point=punto_inicio_lower, point2=punto_fin_lower, color=blanco)
+
     ⚠️ Siempre trazar AMBAS bandas (superior e inferior), sin excepción.
-    ⚠️ Propósito: referencia visual para comparar cuando abre volatilidad al abrir el mercado.
-    ⚠️ NO trazar BB Middle M15 — solo los disipadores (bandas exterior superior e inferior).
+    ⚠️ NO trazar BB Middle M15 — solo los disipadores (bandas exteriores).
+    ⚠️ Propósito: proyección anticipada de hacia dónde van las bandas.
+       Cuando el mercado abre, comparar visualmente la banda REAL vs esta proyección:
+         - Banda real sigue la proyección → dirección confirmada → operar en esa dirección
+         - Banda real se desvía de la proyección → cambio de volatilidad → esperar / reevaluar
 
   PASO 3 — BB H + MAs H  [peso 50% BB / 30% MAs]
     chart_set_timeframe("60")
