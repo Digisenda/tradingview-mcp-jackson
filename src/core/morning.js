@@ -416,132 +416,163 @@ export function generateHtml(briefData, date) {
     )
   );
 
-  // ── Active setups ────────────────────────────────────────────────────────────
-  const activeSetups = [];
+  // ── Asset config (prima ranges) ──────────────────────────────────────────────
+  let assetConfig = {};
+  try { assetConfig = loadRules()?.rules?.asset_config || {}; } catch { /* ignore */ }
+
+  function primaLabel(symbol) {
+    const ac = assetConfig[symbol];
+    if (!ac?.premium_range_optimal) return "—";
+    const min = (ac.premium_range_optimal.min / 100).toFixed(2);
+    const max = (ac.premium_range_optimal.max / 100).toFixed(2);
+    return `$${min}–$${max}`;
+  }
+
+  // ── Classify tickers into briefing sections ───────────────────────────────────
+  const bEjecutar = [];  // { sym, cand }
+  const bVigilar  = [];  // { sym, cand }
+  const bNoOperar = [];  // { symbol, reason, price }
+
   for (const sym of symbols_scanned) {
-    for (const cand of sym.strategy_candidates || []) {
-      if (cand.confidence === "conditions_met") {
-        activeSetups.push({ symbol: sym.symbol, ...cand });
-      }
+    const tickerEarn = fundamental_filters?.earnings?.[sym.symbol];
+    const earnBlocked = tickerEarn?.active;
+    const fedBlocked  = fundamental_filters?.fed?.active;
+
+    if (earnBlocked || fedBlocked) {
+      const reasons = [];
+      if (earnBlocked) reasons.push(`EARNINGS ${tickerEarn.date}`);
+      if (fedBlocked)  reasons.push("FED activo");
+      bNoOperar.push({ symbol: sym.symbol, reason: reasons.join(" · "), price: sym.quote?.last ?? sym.quote?.close });
+      continue;
+    }
+
+    const cands = sym.strategy_candidates || [];
+    const metCands     = cands.filter((c) => c.confidence === "conditions_met");
+    const formingCands = cands.filter((c) => c.confidence === "setup_forming");
+
+    if (metCands.length > 0) {
+      for (const cand of metCands) bEjecutar.push({ sym, cand });
+    } else if (formingCands.length > 0) {
+      for (const cand of formingCands) bVigilar.push({ sym, cand });
+    } else {
+      const best = cands[0];
+      bNoOperar.push({
+        symbol: sym.symbol,
+        reason: best ? `${best.id} ${best.position} — condiciones no alcanzadas` : "Sin setup identificado",
+        price: sym.quote?.last ?? sym.quote?.close,
+      });
     }
   }
 
-  // ── Helpers ──────────────────────────────────────────────────────────────────
-  function trendCls(order) {
-    if (!order) return "text-gray-400";
-    if (order === "alcista" || order === "mixto_alcista") return "text-green-400";
-    if (order === "bajista" || order === "mixto_bajista") return "text-red-400";
-    return "text-orange-400";
-  }
-  function trendLabel(order) {
-    const m = { alcista: "ALCISTA ↑", bajista: "BAJISTA ↓", entrelazado: "LATERAL ↔", mixto_alcista: "MIXTO ↑", mixto_bajista: "MIXTO ↓" };
-    return m[order] || order || "—";
-  }
-  function middleRole(pos) {
-    if (!pos) return "—";
-    if (pos === "above_middle" || pos === "above_upper") return "PISO";
-    if (pos === "below_middle" || pos === "below_lower") return "TECHO";
-    return "—";
-  }
-  function widthCls(w) {
-    if (w == null) return "text-gray-400";
-    if (w < 3) return "text-red-400 font-bold";
-    if (w < 6) return "text-orange-400";
-    return "text-gray-300";
-  }
-  function m15AlertLabel(pos) {
-    if (pos === "above_upper") return " ⚠️ sobre banda sup";
-    if (pos === "below_lower") return " ⚠️ bajo banda inf";
-    return "";
-  }
-  function confBadge(conf) {
-    if (conf === "conditions_met")
-      return `<span class="px-1 py-0.5 bg-orange-900 text-orange-300 text-xs rounded font-bold">ACTIVO</span>`;
-    if (conf === "setup_forming")
-      return `<span class="px-1 py-0.5 bg-yellow-900 text-yellow-300 text-xs rounded">SETUP</span>`;
-    return `<span class="px-1 py-0.5 bg-gray-800 text-gray-500 text-xs rounded">watch</span>`;
-  }
-
-  // ── Ticker cards ─────────────────────────────────────────────────────────────
-  const cards = symbols_scanned.map((sym) => {
-    const price = sym.quote?.last ?? sym.quote?.close;
-    const d1 = sym.timeframes?.D1 || {};
-    const h1 = sym.timeframes?.H1 || {};
+  // ── Condition chips builder ───────────────────────────────────────────────────
+  function buildCondHtml(sym, cand) {
+    const d1  = sym.timeframes?.D1  || {};
     const m15 = sym.timeframes?.M15 || {};
+    const pos = cand.position; // "CALL" | "PUT"
+    const items = [];
 
-    const hasActive = (sym.strategy_candidates || []).some((c) => c.confidence === "conditions_met");
-    const cardBorder = hasActive ? "border-orange-600" : "border-gray-800";
-    const symCls = hasActive ? "text-orange-400" : "text-white";
+    // BB D1 direction
+    const d1Bull = ["above_middle", "above_upper"].includes(d1.bb_position);
+    const d1Bear = ["below_middle", "below_lower"].includes(d1.bb_position);
+    if (pos === "CALL" && d1Bull)      items.push({ ok: true,  label: "BB D1 alcista" });
+    else if (pos === "PUT" && d1Bear)  items.push({ ok: true,  label: "BB D1 bajista" });
+    else                               items.push({ ok: false, label: "BB D1 dirección" });
 
-    const d1MR = middleRole(d1.bb_position);
-    const d1MRCls = d1MR === "PISO" ? "text-green-400" : d1MR === "TECHO" ? "text-red-400" : "text-gray-400";
-    const h1MR = middleRole(h1.bb_position);
-    const h1MRCls = h1MR === "PISO" ? "text-green-400" : h1MR === "TECHO" ? "text-red-400" : "text-gray-400";
+    // MAs D1 alignment
+    const maAlc = ["alcista", "mixto_alcista"].includes(d1.ma_order);
+    const maBaj = ["bajista", "mixto_bajista"].includes(d1.ma_order);
+    if (pos === "CALL" && maAlc)       items.push({ ok: true,  label: "MAs D1 ↑" });
+    else if (pos === "PUT" && maBaj)   items.push({ ok: true,  label: "MAs D1 ↓" });
+    else                               items.push({ ok: false, label: "MAs D1 alineación" });
 
-    const tickerEarnings = fundamental_filters?.earnings?.[sym.symbol];
-    const earnWarnHtml = tickerEarnings?.active
-      ? `<div class="mt-1 text-xs text-red-400">⚠️ EARN ${esc(tickerEarnings.date)}</div>` : "";
+    // BB M15 compression
+    const m15w = m15.bb?.width;
+    if (m15w != null) {
+      if (m15w < 6) items.push({ ok: true,  label: `BB M15 comprimido (${m15w.toFixed(1)})` });
+      else          items.push({ ok: false, label: `BB M15 ancho (${m15w.toFixed(1)})` });
+    }
 
-    const topStrats = [...(sym.strategy_candidates || [])]
-      .sort((a, b) => {
-        const o = { conditions_met: 0, setup_forming: 1, watch: 2 };
-        return (o[a.confidence] ?? 3) - (o[b.confidence] ?? 3);
-      })
-      .slice(0, 3);
+    // At-open pending (always)
+    items.push({ ok: null, label: "Vol M15 sube al abrir" });
+    items.push({ ok: null, label: pos === "CALL" ? "PM virar al alza" : "PM virar a la baja" });
 
-    const stratsHtml = topStrats.length
-      ? topStrats.map((s) => `
-          <div class="flex items-center gap-1 mt-1">
-            ${confBadge(s.confidence)}
-            <span class="text-xs text-gray-300">${esc(s.id)}</span>
-            <span class="text-xs font-bold ${s.position === "CALL" ? "text-green-400" : "text-red-400"}">${s.position}</span>
-          </div>`).join("")
-      : `<div class="text-xs text-gray-600 mt-1">Sin setup activo</div>`;
+    return items.map((item) => {
+      let icon, cls;
+      if (item.ok === true)        { icon = "✅"; cls = "text-green-400"; }
+      else if (item.ok === false)  { icon = "🔲"; cls = "text-gray-500"; }
+      else                         { icon = "🔲"; cls = "text-yellow-500"; }
+      return `<span class="${cls} text-xs whitespace-nowrap">${icon} ${esc(item.label)}</span>`;
+    }).join("");
+  }
+
+  function stratRowHtml(entry, urgency) {
+    const { sym, cand } = entry;
+    const price = sym.quote?.last ?? sym.quote?.close;
+    const prima = primaLabel(sym.symbol);
+    const posCls  = cand.position === "CALL" ? "text-green-400" : "text-red-400";
+    const rowBg   = urgency === "ejecutar" ? "border-green-900/50" : "border-yellow-900/40";
+    const rowInner = urgency === "ejecutar" ? "#0c1a0c" : "#171200";
+    const condHtml = buildCondHtml(sym, cand);
+    const noteHtml = cand.note
+      ? `<div class="text-gray-500 text-xs mt-1 truncate">${esc(cand.note)}</div>` : "";
 
     return `
-    <div class="rounded-lg p-3 border ${cardBorder}" style="background:#111827">
-      <div class="flex justify-between items-start mb-1">
-        <span class="font-bold ${symCls}">${esc(sym.symbol)}${hasActive ? " ⭐" : ""}</span>
-        <span class="font-bold text-white">$${price != null ? Number(price).toFixed(2) : "—"}</span>
+    <div class="rounded-lg p-3 mb-2 border ${rowBg}" style="background:${rowInner}">
+      <div class="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
+        <span class="font-bold text-white text-sm">${esc(sym.symbol)}</span>
+        <span class="font-bold ${posCls} text-sm">${esc(cand.position)}</span>
+        <span class="text-orange-300 text-xs font-bold bg-orange-900/40 px-1.5 py-0.5 rounded">${esc(cand.id)}</span>
+        <span class="ml-auto text-xs text-gray-400">Prima: <span class="text-white font-bold">${prima}</span></span>
+        <span class="text-red-400 text-xs">Stop <span class="font-bold">−25%</span></span>
+        <span class="text-green-400 text-xs">Target <span class="font-bold">+12%</span></span>
+        ${price != null ? `<span class="text-gray-600 text-xs font-mono">$${Number(price).toFixed(2)}</span>` : ""}
       </div>
-      <div class="text-xs font-bold mb-2 ${trendCls(d1.ma_order)}">${trendLabel(d1.ma_order)}</div>
-      <div class="space-y-1 text-xs text-gray-400">
-        <div class="flex justify-between">
-          <span>BB D1</span>
-          <span>${d1.bb?.basis != null ? "$" + d1.bb.basis.toFixed(2) : "—"} <span class="${d1MRCls}">${d1MR}</span></span>
-        </div>
-        <div class="flex justify-between">
-          <span>BB H1</span>
-          <span>${h1.bb?.basis != null ? "$" + h1.bb.basis.toFixed(2) : "—"} <span class="${h1MRCls}">${h1MR}</span></span>
-        </div>
-        <div class="flex justify-between">
-          <span>M15 width</span>
-          <span class="${widthCls(m15.bb?.width)}">${m15.bb?.width != null ? m15.bb.width.toFixed(2) : "—"}${m15AlertLabel(m15.bb_position)}</span>
-        </div>
-      </div>
-      ${earnWarnHtml}
-      <div class="mt-2 pt-2 border-t border-gray-800">${stratsHtml}</div>
+      <div class="flex flex-wrap gap-x-3 gap-y-1">${condHtml}</div>
+      ${noteHtml}
     </div>`;
-  }).join("\n");
+  }
 
-  // ── Banners ──────────────────────────────────────────────────────────────────
-  const fundamentalBanner = fundamentalWarnings.length
-    ? `<div class="rounded-lg p-3 mb-4 border border-red-700" style="background:#2d0a0a">
-        <div class="text-red-400 font-bold">⛔ RESTRICCIÓN ACTIVA — NO OPERAR</div>
-        ${fundamentalWarnings.map((w) => `<div class="text-red-300 text-sm">${esc(w)}</div>`).join("")}
-      </div>` : "";
+  // ── Build briefing HTML ───────────────────────────────────────────────────────
+  const ejecutarHtml = bEjecutar.length
+    ? bEjecutar.map((e) => stratRowHtml(e, "ejecutar")).join("")
+    : `<div class="text-gray-600 text-xs py-2 pl-1">Sin setups listos para ejecutar hoy</div>`;
 
-  const setupBanner = activeSetups.length
-    ? `<div class="rounded-lg p-3 mb-4 border border-orange-700" style="background:#2d1a00">
-        <div class="text-orange-400 font-bold text-sm mb-1">⭐ SETUP ACTIVO — CONFIRMAR ANTES DE ENTRAR</div>
-        ${activeSetups.map((s) => `
-        <div class="text-sm mt-1">
-          <span class="text-white font-bold">${esc(s.symbol)}</span>
-          <span class="text-orange-300 ml-2">${esc(s.id)}</span>
-          <span class="font-bold ml-2 ${s.position === "CALL" ? "text-green-400" : "text-red-400"}">${s.position}</span>
-          <span class="text-gray-400 ml-2 text-xs">${esc(s.note)}</span>
-        </div>`).join("")}
-      </div>` : "";
+  const vigilarHtml = bVigilar.length
+    ? bVigilar.map((e) => stratRowHtml(e, "vigilar")).join("")
+    : `<div class="text-gray-600 text-xs py-2 pl-1">Sin setups en formación</div>`;
+
+  const noOperarHtml = bNoOperar.length
+    ? bNoOperar.map((e) => `
+      <div class="flex items-baseline gap-2 py-1 border-b border-gray-800/50 last:border-0 text-xs">
+        <span class="font-bold text-gray-400 w-12 flex-shrink-0">${esc(e.symbol)}</span>
+        ${e.price != null ? `<span class="text-gray-600 font-mono">$${Number(e.price).toFixed(2)}</span>` : ""}
+        <span class="text-gray-500">→ ${esc(e.reason)}</span>
+      </div>`).join("")
+    : `<div class="text-gray-600 text-xs py-2 pl-1">Todos los tickers tienen setup activo</div>`;
+
+  const briefingSection = `
+  <!-- BRIEFING PREMARKET -->
+  <div class="rounded-lg border border-gray-800 mb-4 overflow-hidden" style="background:#080d14">
+    ${fundamentalWarnings.length ? `
+    <div class="px-4 py-2.5 border-b border-red-900/60" style="background:#1a0505">
+      <div class="text-red-400 font-bold text-xs tracking-wide">⛔ RESTRICCIÓN GLOBAL — NO OPERAR · ${fundamentalWarnings.map((w) => esc(w)).join(" · ")}</div>
+    </div>` : ""}
+
+    <div class="p-4 border-b border-gray-800/60">
+      <div class="text-green-400 font-bold text-xs tracking-widest mb-3">🟢 EJECUTAR AL ABRIR</div>
+      ${ejecutarHtml}
+    </div>
+
+    <div class="p-4 border-b border-gray-800/60">
+      <div class="text-yellow-400 font-bold text-xs tracking-widest mb-3">🟡 VIGILAR — falta confirmación al abrir</div>
+      ${vigilarHtml}
+    </div>
+
+    <div class="p-4">
+      <div class="text-red-400 font-bold text-xs tracking-widest mb-3">🔴 NO OPERAR</div>
+      ${noOperarHtml}
+    </div>
+  </div>`;
 
   // ── Full HTML ─────────────────────────────────────────────────────────────────
   return `<!DOCTYPE html>
@@ -568,12 +599,7 @@ export function generateHtml(briefData, date) {
     </div>
   </div>
 
-  ${fundamentalBanner}${setupBanner}
-
-  <!-- GRID TICKERS -->
-  <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mb-6">
-    ${cards}
-  </div>
+  ${briefingSection}
 
   <!-- IMPORTAR DESDE SCHWAB -->
   <div id="schwab-section" class="rounded-lg p-4 border border-blue-900/40 mb-3" style="background:#0a1628">
