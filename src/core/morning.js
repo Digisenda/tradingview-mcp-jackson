@@ -401,6 +401,21 @@ export function generateHtml(briefData, date) {
 
   const fundamentalWarnings = fundamental_filters?.warnings || [];
 
+  // ── Daily strategies map (para Schwab auto-suggest) ─────────────────────────
+  const dailyStrategiesJson = JSON.stringify(
+    Object.fromEntries(
+      symbols_scanned.map((sym) => [
+        sym.symbol,
+        (sym.strategy_candidates || []).map((c) => ({
+          id: c.id,
+          position: c.position,
+          confidence: c.confidence,
+          note: c.note || "",
+        })),
+      ])
+    )
+  );
+
   // ── Active setups ────────────────────────────────────────────────────────────
   const activeSetups = [];
   for (const sym of symbols_scanned) {
@@ -560,6 +575,47 @@ export function generateHtml(briefData, date) {
     ${cards}
   </div>
 
+  <!-- IMPORTAR DESDE SCHWAB -->
+  <div id="schwab-section" class="rounded-lg p-4 border border-blue-900/40 mb-3" style="background:#0a1628">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-blue-400 text-sm font-bold">📷 IMPORTAR DESDE SCHWAB</div>
+      <div id="watcher-status" class="text-xs font-mono px-2 py-0.5 rounded" style="background:#111827">
+        <span class="text-gray-600">○ verificando...</span>
+      </div>
+    </div>
+    <label id="schwab-dropzone"
+      class="flex items-center justify-center border-2 border-dashed border-gray-700 rounded-lg p-5 cursor-pointer transition-colors"
+      style="background:#111827">
+      <input type="file" id="schwab-file" accept="image/*" class="hidden">
+      <div id="schwab-idle" class="text-center pointer-events-none">
+        <div class="text-2xl mb-1">📥</div>
+        <div class="text-gray-400 text-xs">Arrastra captura de Schwab aquí · o haz clic para seleccionar</div>
+        <div class="text-gray-600 text-xs mt-1">PNG · JPG · GIF</div>
+      </div>
+    </label>
+    <div id="schwab-ready" class="hidden mt-3 flex gap-3 items-center">
+      <img id="schwab-thumb" class="w-20 h-14 object-cover rounded border border-gray-700 flex-shrink-0" src="" alt="preview">
+      <div class="flex-1 min-w-0">
+        <div id="schwab-fname" class="text-xs text-gray-300 truncate font-mono"></div>
+        <div id="schwab-analyze-status" class="text-xs text-gray-500 mt-0.5"></div>
+      </div>
+      <button onclick="analyzeSchwabImage()" id="schwab-btn"
+        class="px-3 py-2 rounded text-xs font-bold text-white flex-shrink-0 hover:opacity-90 transition"
+        style="background:#1d4ed8">
+        🔍 Analizar
+      </button>
+    </div>
+    <div id="schwab-extracted" class="hidden mt-3 rounded p-3 border border-green-900/50 text-xs" style="background:#071a07">
+      <div class="text-green-400 font-bold mb-2">✓ Campos extraídos — revisa y confirma</div>
+      <div id="schwab-extracted-fields" class="grid grid-cols-4 gap-2 text-gray-300 mb-3"></div>
+      <button onclick="fillFormFromSchwab()"
+        class="w-full py-1.5 rounded text-xs font-bold text-white hover:opacity-90 transition"
+        style="background:#16a34a">
+        ↓ Rellenar formulario con estos datos
+      </button>
+    </div>
+  </div>
+
   <!-- LOG TRADE -->
   <div class="rounded-lg p-4 border border-gray-800" style="background:#111827">
     <div class="text-gray-400 text-sm font-bold mb-3">📝 LOG TRADE</div>
@@ -686,6 +742,19 @@ export function generateHtml(briefData, date) {
   </div>
 
 <script>
+  // ── Estrategias propuestas hoy (inyectadas desde morning_brief) ──────────────
+  var DAILY_STRATEGIES = ${dailyStrategiesJson};
+
+  // Busca la mejor estrategia del día para ticker + lado dado
+  function suggestStrategy(ticker, side) {
+    var strats = DAILY_STRATEGIES[ticker] || [];
+    var matches = strats.filter(function(s) { return s.position === side; });
+    if (!matches.length) return null;
+    var order = { conditions_met: 0, setup_forming: 1, watch: 2 };
+    matches.sort(function(a, b) { return (order[a.confidence] || 3) - (order[b.confidence] || 3); });
+    return matches[0];
+  }
+
   (function () {
     function updateClock() {
       var now = new Date();
@@ -825,6 +894,184 @@ export function generateHtml(briefData, date) {
   }
 
   window.addEventListener('load', loadTrades);
+
+  // ── Schwab image analyzer ────────────────────────────────────────────────────
+  var WATCHER = 'http://127.0.0.1:9224';
+  var _schwabFile = null;
+  var _schwabData = null;
+
+  // Ping watcher al cargar
+  (async function pingWatcher() {
+    var el = document.getElementById('watcher-status');
+    if (!el) return;
+    try {
+      var r = await fetch(WATCHER + '/ping', { signal: AbortSignal.timeout(1500) });
+      if (r.ok) {
+        el.innerHTML = '<span class="text-green-400">● activo</span>';
+      } else { throw new Error(); }
+    } catch(e) {
+      el.innerHTML = '<span class="text-yellow-600" title="En terminal del proyecto: npm run schwab">○ npm run schwab</span>';
+    }
+  })();
+
+  // Drop zone setup
+  (function initSchwab() {
+    var dz = document.getElementById('schwab-dropzone');
+    var fi = document.getElementById('schwab-file');
+    if (!dz || !fi) return;
+    dz.addEventListener('dragover', function(e) {
+      e.preventDefault();
+      dz.style.borderColor = '#3b82f6';
+    });
+    dz.addEventListener('dragleave', function() {
+      dz.style.borderColor = '';
+    });
+    dz.addEventListener('drop', function(e) {
+      e.preventDefault();
+      dz.style.borderColor = '';
+      var file = e.dataTransfer && e.dataTransfer.files[0];
+      if (file && file.type.startsWith('image/')) loadSchwabFile(file);
+    });
+    fi.addEventListener('change', function() {
+      if (fi.files[0]) loadSchwabFile(fi.files[0]);
+    });
+  })();
+
+  function loadSchwabFile(file) {
+    _schwabFile = file;
+    _schwabData = null;
+    document.getElementById('schwab-fname').textContent = file.name;
+    document.getElementById('schwab-analyze-status').textContent = 'Listo para analizar';
+    document.getElementById('schwab-extracted').classList.add('hidden');
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      document.getElementById('schwab-thumb').src = e.target.result;
+      document.getElementById('schwab-idle').classList.add('hidden');
+      document.getElementById('schwab-ready').classList.remove('hidden');
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function analyzeSchwabImage() {
+    if (!_schwabFile) return;
+    var btn = document.getElementById('schwab-btn');
+    var status = document.getElementById('schwab-analyze-status');
+    var wStatus = document.getElementById('watcher-status');
+    btn.textContent = '⏳';
+    btn.disabled = true;
+    status.textContent = 'Enviando imagen a Claude Haiku...';
+    try {
+      var base64 = await new Promise(function(res, rej) {
+        var r = new FileReader();
+        r.onload = function(e) { res(e.target.result.split(',')[1]); };
+        r.onerror = rej;
+        r.readAsDataURL(_schwabFile);
+      });
+      var resp = await fetch(WATCHER + '/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image_base64: base64, media_type: _schwabFile.type || 'image/png' }),
+        signal: AbortSignal.timeout(30000)
+      });
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var result = await resp.json();
+      if (!result.success) throw new Error(result.error || 'Error desconocido');
+      _schwabData = result.fields;
+      showExtractedFields(_schwabData);
+      status.textContent = '✓ Análisis completo';
+      wStatus.innerHTML = '<span class="text-green-400">● activo</span>';
+    } catch(err) {
+      var msg = err.message || '';
+      if (msg.indexOf('fetch') >= 0 || msg.indexOf('Failed') >= 0 || msg.indexOf('NetworkError') >= 0 || msg.indexOf('timeout') >= 0) {
+        status.textContent = '❌ Analizador no activo → ejecuta: npm run schwab';
+        wStatus.innerHTML = '<span class="text-red-400">✗ offline</span>';
+      } else {
+        status.textContent = '❌ ' + msg;
+      }
+    } finally {
+      btn.textContent = '🔍 Analizar';
+      btn.disabled = false;
+    }
+  }
+
+  function showExtractedFields(f) {
+    var items = [
+      ['TICKER', f.ticker],
+      ['LADO', f.side],
+      ['STRIKE', f.strike != null ? '$' + f.strike : null],
+      ['EXPIRACIÓN', f.expiration],
+      ['PRIMA ENTRADA', f.premium_entry != null ? '$' + f.premium_entry : null],
+      ['PRIMA SALIDA', f.premium_exit != null ? '$' + f.premium_exit : null],
+      ['CONTRATOS', f.contracts],
+      ['MODO', f.mode]
+    ];
+    var fieldsHtml = items.map(function(item) {
+      var val = item[1] != null ? String(item[1]) : '—';
+      var cls = item[1] != null ? 'text-white font-bold' : 'text-gray-600';
+      return '<div><span class="block text-gray-500 text-xs">' + item[0] + '</span>'
+        + '<span class="' + cls + '">' + val + '</span></div>';
+    }).join('');
+
+    // Estrategia sugerida del día
+    var suggested = (f.ticker && f.side) ? suggestStrategy(f.ticker, f.side) : null;
+    var confLabel = { conditions_met: '⭐ ACTIVO', setup_forming: '🔶 SETUP', watch: '👁 WATCH' };
+    var stratHtml;
+    if (suggested) {
+      var badge = confLabel[suggested.confidence] || suggested.confidence;
+      stratHtml = '<div class="col-span-4 mt-2 pt-2 border-t border-green-900/40 flex items-center gap-2">'
+        + '<span class="text-gray-500 text-xs">ESTRATEGIA PROPUESTA HOY</span>'
+        + '<span class="font-bold text-white">' + suggested.id + '</span>'
+        + '<span class="text-xs px-1.5 py-0.5 rounded font-bold" style="background:#1c3a1c;color:#86efac">' + badge + '</span>'
+        + (suggested.note ? '<span class="text-gray-500 text-xs truncate">' + suggested.note + '</span>' : '')
+        + '</div>';
+    } else if (f.ticker && f.side) {
+      stratHtml = '<div class="col-span-4 mt-2 pt-2 border-t border-yellow-900/40">'
+        + '<span class="text-yellow-500 text-xs">⚠️ No hay estrategia propuesta hoy para ' + (f.ticker || '') + ' ' + (f.side || '') + ' — seleccionar manualmente</span>'
+        + '</div>';
+    } else {
+      stratHtml = '';
+    }
+
+    document.getElementById('schwab-extracted-fields').innerHTML = fieldsHtml + stratHtml;
+    document.getElementById('schwab-extracted').classList.remove('hidden');
+  }
+
+  function fillFormFromSchwab() {
+    var f = _schwabData;
+    if (!f) return;
+    function setSelect(id, val) {
+      var s = document.getElementById(id);
+      if (!s || val == null) return;
+      var v = String(val);
+      for (var i = 0; i < s.options.length; i++) {
+        if (s.options[i].value === v || s.options[i].text === v) { s.selectedIndex = i; return; }
+      }
+    }
+    setSelect('t-ticker', f.ticker);
+    setSelect('t-side', f.side);
+    setSelect('t-mode', f.mode || 'real');
+    if (f.strike != null) document.getElementById('t-strike').value = f.strike;
+    if (f.expiration) document.getElementById('t-expiry').value = f.expiration;
+    if (f.premium_entry != null) { document.getElementById('t-entry').value = f.premium_entry; }
+    if (f.premium_exit != null) { document.getElementById('t-exit').value = f.premium_exit; }
+    if (f.contracts != null) document.getElementById('t-contracts').value = f.contracts;
+
+    // Auto-seleccionar estrategia sugerida del día
+    var suggested = (f.ticker && f.side) ? suggestStrategy(f.ticker, f.side) : null;
+    if (suggested) {
+      setSelect('t-strategy', suggested.id);
+    }
+
+    calcResult();
+    // Reset sección Schwab
+    document.getElementById('schwab-extracted').classList.add('hidden');
+    document.getElementById('schwab-ready').classList.add('hidden');
+    document.getElementById('schwab-idle').classList.remove('hidden');
+    _schwabFile = null;
+    // Scroll al formulario
+    document.getElementById('trade-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
 </script>
 </body>
 </html>`;
