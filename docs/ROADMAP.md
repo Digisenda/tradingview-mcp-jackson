@@ -139,7 +139,42 @@ Sin backend, sin Docker, sin auth. Se abre directo en el browser con un clic.
 
 ---
 
-## FASE 5 — Pinecone RAG Integration ⏳ PENDIENTE
+## FASE 5 — Supabase Persistence + Signal Architecture ✅ COMPLETADA
+
+> Commits: `1c8eaec`, `f1e222a` — 2026-05-24 / 2026-05-25
+
+### Objetivo
+Cerrar el loop análisis → ejecución: guardar trades en la nube, referenciarlos con las señales del premarket, y alimentar retroalimentación automática en la siguiente sesión.
+
+### Implementación
+- [x] `src/core/supabase.js` — cliente Supabase con helpers para sesiones, trades, señales y screenshots
+- [x] Tablas: `premarket_sessions`, `trades`, `signals`, `screenshots` (bucket Storage)
+- [x] `signal_code` como PK de señales: `YYYYMMDD-TICKER-SIDE-STRATXX`
+- [x] `savePremarketReport()` genera señales en Supabase al guardar el reporte
+- [x] `getRecentTrades()` retro-alimenta el análisis del día siguiente (win rate por strat/ticker)
+- [x] `.env.example` actualizado con `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`
+
+---
+
+## FASE 6 — Schwab Screenshot Analyzer + Dashboard LOG TRADE ✅ COMPLETADA
+
+> Commits: `9c50c83`, `0d132eb`, `a8cc06f` — 2026-05-25
+
+### Objetivo
+Eliminar el ingreso manual de datos en el LOG TRADE: arrastrar una captura del historial de Charles Schwab al dashboard → Claude Haiku extrae los campos automáticamente → pre-llena el formulario.
+
+### Implementación
+- [x] `src/core/schwab-analyzer.js` — servidor local en puerto 9224
+  - `POST /analyze` — recibe imagen base64 → Claude Haiku via `tool_use` forzado → campos JSON
+  - CORS restringido a `file://` + localhost (seguridad contra fuga de API key)
+  - `npm run schwab` para iniciar
+- [x] `generateHtml()` extendido con drop zone Schwab + signal picker + open positions panel
+- [x] `setSelect(id, val, addIfMissing=true)` — tickers desconocidos se agregan al dropdown
+- [x] Fix template literal: `data-*` attributes en lugar de `onclick` con strings escapados
+
+---
+
+## FASE 7 — Pinecone RAG Integration ⏳ PENDIENTE
 
 > Fuente: `docs/pinecone-rag-integration/PLAN.md` (plan completo aquí)
 
@@ -180,10 +215,12 @@ pinecone.query(top_k=3) → contexto cualitativo al reporte
 
 | Fase | Descripción | Estado |
 |------|-------------|--------|
-| 1 | Unificación morning_brief + checklist (Etapas 1-3) | ✅ Completada |
-| 2 | Verificación end-to-end (BB + SMAs + checklist completo) | ✅ Completada |
-| 3 | Análisis Fundamental Automatizado (Finviz / FED / Earnings) | ✅ Completada |
+| 1 | Unificación morning_brief + checklist (Etapas 1-3) | ✅ Completada — 2026-05-19 |
+| 2 | Verificación end-to-end (BB + SMAs + checklist completo) | ✅ Completada — 2026-05-20 |
+| 3 | Análisis Fundamental Automatizado (Finviz / FED / Earnings) | ✅ Completada — 2026-05-20 |
 | 4 | Dashboard HTML estático (generado por morning_brief) | ✅ Completada — 2026-05-21 |
-| 5 | Pinecone RAG Integration | ⏳ Pendiente — 4 preguntas previas |
+| 5 | Supabase persistence + signal architecture | ✅ Completada — 2026-05-24 |
+| 6 | Schwab screenshot analyzer + Dashboard LOG TRADE | ✅ Completada — 2026-05-25 |
+| 7 | Pinecone RAG Integration | ⏳ Pendiente — 4 preguntas previas |
 
-**Próxima sesión:** implementar Fase 4 (HTML dashboard). Fase 5 (Pinecone RAG) requiere 4 preguntas confirmadas — ver `docs/pinecone-rag-integration/PLAN.md`.
+**Próxima sesión:** Fase 7 (Pinecone RAG) requiere confirmar 4 preguntas sobre el índice — ver `docs/pinecone-rag-integration/PLAN.md`.

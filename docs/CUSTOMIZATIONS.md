@@ -159,7 +159,79 @@ el param `brief_data` que upstream no tiene.
 
 ---
 
-## Pendiente — Fase 5: Pinecone RAG
+## Fase 5 — Supabase Persistence + Signal Architecture
+**Commits:** `1c8eaec`, `f1e222a` | **Fecha:** 2026-05-24 / 2026-05-25
+
+### Qué cambió
+- **`src/core/supabase.js`** _(nuevo)_ — cliente Supabase + helpers:
+  - `savePremarketSession(date, content, briefData)` — guarda o actualiza el reporte del día
+  - `saveScreenshot({ date, ticker, filename, localPath })` — sube PNG a Storage + metadata
+  - `saveSignals(signals)` — upsert de señales propuestas por Claude
+  - `getSignalsForDate(date)` — recupera señales de una fecha para el dashboard y checklist
+  - `saveTrade(trade)` — inserta un trade en la tabla `trades`
+  - `closeTrade(tradeId, exitData)` — cierra una posición: `premium_exit`, `exit_date`, `result_pct`, `status = 'closed'`
+  - `getOpenPositions()` — posiciones abiertas para el dashboard
+  - `getRecentTrades(limit)` — últimos N trades cerrados para retroalimentación
+- **`src/core/morning.js`** — `savePremarketReport()` llama a `savePremarketSession()` y `saveSignals()` tras guardar el `.md`
+- **`.env.example`** — añadidas variables `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`
+- **`package.json`** — nuevo script `"schwab": "node --use-system-ca src/core/schwab-analyzer.js"`
+
+### Tablas Supabase
+| Tabla | Contenido |
+|-------|-----------|
+| `premarket_sessions` | Reporte diario (markdown + brief_data JSON). PK: `date` (YYYY-MM-DD) |
+| `trades` | Operaciones ejecutadas. Campos: ticker, side, strike, expiration, premium_entry/exit, result_pct, status, signal_code |
+| `screenshots` | Metadata de imágenes. Storage bucket: `screenshots` |
+| `signals` | Señales propuestas por Claude por sesión. PK: `signal_code` |
+
+### Arquitectura de señales (signal-first)
+`signal_code` = `YYYYMMDD-TICKER-SIDE-STRATXX` (ej. `20260525-NVDA-CALL-STRAT08`)  
+Claude genera signals en `premarket_save` → el trade los referencia al ejecutarse → cierre del loop análisis↔ejecución.
+
+### Fix técnico: NULL en SQL
+`.in("status", ["closed", null])` **NO** hace match de NULLs en PostgREST.  
+Solución: `.or("status.eq.closed,status.is.null")` — incluye trades legacy sin `status`.
+
+### Archivos que NO cambia upstream
+`src/core/supabase.js` es exclusivo de este fork. `.env.example` puede tener conflicto leve con upstream — mantener la versión Digisenda con las 3 variables.
+
+---
+
+## Fase 6 — Schwab Screenshot Analyzer + Dashboard LOG TRADE
+**Commits:** `9c50c83`, `0d132eb`, `a8cc06f` | **Fecha:** 2026-05-25
+
+### Qué cambió
+- **`src/core/schwab-analyzer.js`** _(nuevo)_ — servidor HTTP local en puerto 9224:
+  - `GET /ping` — health check
+  - `POST /analyze` — recibe `{ image_base64, media_type }` → llama a Claude Haiku via `tool_use` → retorna campos estructurados del trade
+  - Usa `tool_choice: { type: "tool", name: "extract_schwab_trade" }` para forzar JSON estructurado (nunca respuesta conversacional)
+  - CORS restringido: permite `Origin: null` (file://), `localhost`, `127.0.0.1`. Rechaza orígenes externos con 403.
+  - `npm run schwab` para iniciar; requiere `ANTHROPIC_API_KEY` en `.env`
+
+- **`src/core/morning.js`** — `generateHtml()` extendido con 3 nuevas zonas en el dashboard:
+  - **Drop zone Schwab** — arrastra screenshot de historial → Claude Haiku extrae BOT/SOLD → pre-llena formulario
+  - **Signal picker** — muestra señales del día, selecciona para pre-llenar formulario
+  - **Open positions panel** — lista posiciones abiertas desde Supabase; botón "Cerrar" pre-llena el formulario de cierre
+  - Fix `setSelect(id, val, addIfMissing=true)` — si el ticker del screenshot no está en el dropdown, lo crea dinámicamente
+
+### Flujo completo LOG TRADE en el dashboard
+```
+1. Drop screenshot BOT (entrada) → Haiku extrae ticker/side/strike/expiry/premium_entry/status
+2. Si status="closed" → extrae también premium_exit y result_pct
+3. "Rellenar formulario" → pre-llena todos los campos
+4. "Guardar" → llama Supabase (saveTrade o closeTrade según status)
+```
+
+### Fix técnico: template literal escaping
+`'\''` dentro de un template literal JS → `\'` se consume → `''` en el output → SyntaxError en el browser.  
+Solución: usar `data-*` HTML attributes + función `handleCloseBtn(btn)` que lee `btn.dataset.*` — sin necesidad de escapar comillas.
+
+### Archivos que NO cambia upstream
+`src/core/schwab-analyzer.js` es exclusivo de este fork. `generateHtml` en `morning.js` es exclusivo de este fork.
+
+---
+
+## Pendiente — Fase 7: Pinecone RAG
 Ver `docs/pinecone-rag-integration/PLAN.md` para el plan detallado.
 
 Resumen: integrar RAG de Pinecone al flujo premarket como PASO 5.5 — consulta
