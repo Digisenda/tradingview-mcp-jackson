@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import * as chart from "./chart.js";
 import * as data from "./data.js";
 import { checkFundamentals } from "./fundamental.js";
-import { savePremarketSession } from "./supabase.js";
+import { savePremarketSession, saveSignals } from "./supabase.js";
 import { removeOne } from "./drawing.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -628,12 +628,14 @@ export function generateHtml(briefData, date) {
           </select>
         </div>
         <div>
-          <label class="text-xs text-gray-500 block mb-1">ESTRATEGIA</label>
+          <label class="text-xs text-gray-500 block mb-1">SEÑAL / ESTRATEGIA</label>
           <select id="t-strategy" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
+            <option value="">— seleccionar —</option>
             <option>STRAT-01</option><option>STRAT-02</option><option>STRAT-03</option>
             <option>STRAT-04</option><option>STRAT-05</option><option>STRAT-08</option>
             <option>STRAT-09</option><option>STRAT-10</option><option>STRAT-11</option>
           </select>
+          <input type="hidden" id="t-signal-code" value="">
         </div>
         <div>
           <label class="text-xs text-gray-500 block mb-1">LADO</label>
@@ -685,6 +687,15 @@ export function generateHtml(briefData, date) {
       </button>
     </form>
     <div id="trade-msg" class="text-xs mt-2 text-center hidden"></div>
+  </div>
+
+  <!-- POSICIONES ABIERTAS -->
+  <div id="open-positions-section" class="rounded-lg p-4 border border-yellow-900/40 mb-3" style="background:#111822">
+    <div class="flex justify-between items-center mb-3">
+      <div class="text-yellow-400 text-sm font-bold">🟡 POSICIONES ABIERTAS</div>
+      <button onclick="loadOpenPositions()" class="text-xs text-yellow-500 hover:text-yellow-300">↻ Actualizar</button>
+    </div>
+    <div id="open-positions-body" class="text-xs text-gray-500">Cargando...</div>
   </div>
 
   <!-- HISTORIAL RECIENTE -->
@@ -820,21 +831,33 @@ export function generateHtml(briefData, date) {
   async function submitTrade(e) {
     e.preventDefault();
     var msg = document.getElementById('trade-msg');
-    var entry = parseFloat(document.getElementById('t-entry').value);
-    var exit  = parseFloat(document.getElementById('t-exit').value);
-    var resultPct = (entry && exit && entry > 0) ? ((exit - entry) / entry) * 100 : null;
+    var entry      = parseFloat(document.getElementById('t-entry').value) || null;
+    var exitVal    = parseFloat(document.getElementById('t-exit').value)  || null;
+    var resultPct  = (entry && exitVal && entry > 0)
+                     ? parseFloat(((exitVal - entry) / entry * 100).toFixed(2)) : null;
+    var signalCode = document.getElementById('t-signal-code').value || null;
+
+    // Tomar entry_date/exit_date de _schwabData si hay (posición de Schwab)
+    var entryDate = (_schwabData && _schwabData.entry_date) ? _schwabData.entry_date : '${dateStr}';
+    var exitDate  = (_schwabData && _schwabData.exit_date)  ? _schwabData.exit_date  : null;
+    var tradeStatus = exitVal ? 'closed' : 'open';
+
     var trade = {
       date:          '${dateStr}',
+      entry_date:    entryDate,
+      exit_date:     exitDate,
+      status:        tradeStatus,
       ticker:        document.getElementById('t-ticker').value,
-      strategy:      document.getElementById('t-strategy').value,
+      strategy:      document.getElementById('t-strategy').value || null,
+      signal_code:   signalCode,
       side:          document.getElementById('t-side').value,
       mode:          document.getElementById('t-mode').value,
       strike:        parseFloat(document.getElementById('t-strike').value) || null,
       expiration:    document.getElementById('t-expiry').value || null,
-      premium_entry: entry || null,
-      premium_exit:  exit  || null,
+      premium_entry: entry,
+      premium_exit:  exitVal,
       contracts:     parseInt(document.getElementById('t-contracts').value) || 1,
-      result_pct:    resultPct ? parseFloat(resultPct.toFixed(2)) : null,
+      result_pct:    resultPct,
       notes:         document.getElementById('t-notes').value || null
     };
     try {
@@ -843,12 +866,16 @@ export function generateHtml(briefData, date) {
         body: JSON.stringify(trade)
       });
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      msg.textContent = '✅ Trade guardado';
+      var label = tradeStatus === 'open' ? '✅ Posición abierta registrada' : '✅ Trade cerrado guardado';
+      if (signalCode) label += ' · señal: ' + signalCode;
+      msg.textContent = label;
       msg.className = 'text-xs mt-2 text-center text-green-400';
       msg.classList.remove('hidden');
       document.getElementById('trade-form').reset();
+      document.getElementById('t-signal-code').value = '';
       document.getElementById('t-result-display').textContent = '—';
-      setTimeout(function(){ msg.classList.add('hidden'); }, 3000);
+      _schwabData = null;
+      setTimeout(function(){ msg.classList.add('hidden'); }, 4000);
       loadTrades();
     } catch(err) {
       msg.textContent = '❌ Error: ' + err.message;
@@ -893,9 +920,86 @@ export function generateHtml(briefData, date) {
     }
   }
 
-  window.addEventListener('load', loadTrades);
+  // ── Posiciones abiertas ──────────────────────────────────────────────────────
+  async function loadOpenPositions() {
+    var el = document.getElementById('open-positions-body');
+    var sec = document.getElementById('open-positions-section');
+    try {
+      var res = await fetch(
+        SB_URL + '/rest/v1/trades?select=id,entry_date,ticker,strategy,signal_code,side,strike,expiration,premium_entry,contracts,mode&status=eq.open&order=entry_date.desc',
+        { headers: sbHeaders() }
+      );
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      var positions = await res.json();
+      if (!positions.length) {
+        el.innerHTML = '<p class="text-gray-600 text-center py-2">Sin posiciones abiertas.</p>';
+        sec.style.borderColor = '';
+        return;
+      }
+      // Marcar sección en amarillo si hay posiciones
+      sec.style.borderColor = '#ca8a04';
+      var rows = positions.map(function(p) {
+        var daysOpen = p.entry_date
+          ? Math.floor((Date.now() - new Date(p.entry_date)) / 86400000) : '?';
+        var sigHtml = p.signal_code
+          ? '<span class="text-blue-400">' + p.signal_code + '</span>'
+          : '<span class="text-gray-600">—</span>';
+        return '<tr class="border-b border-gray-800">'
+          + '<td class="py-1.5 pr-2 text-yellow-400 font-bold">' + (p.ticker||'—') + '</td>'
+          + '<td class="py-1.5 pr-2 ' + (p.side==='CALL'?'text-green-400':'text-red-400') + ' font-bold">' + (p.side||'—') + '</td>'
+          + '<td class="py-1.5 pr-2 text-gray-300">' + (p.strike ? '$'+p.strike : '—') + '</td>'
+          + '<td class="py-1.5 pr-2 text-gray-400">' + (p.expiration||'—') + '</td>'
+          + '<td class="py-1.5 pr-2 text-gray-300">' + (p.premium_entry ? '$'+p.premium_entry : '—') + '</td>'
+          + '<td class="py-1.5 pr-2 text-gray-500">' + (p.contracts||1) + ' cto.</td>'
+          + '<td class="py-1.5 pr-2 text-gray-500">' + (p.entry_date||'—') + ' <span class="text-orange-400">(+' + daysOpen + 'd)</span></td>'
+          + '<td class="py-1.5 pr-2">' + sigHtml + '</td>'
+          + '<td class="py-1.5">'
+          + '<button onclick="prefillClosePosition(\'' + p.id + '\',\'' + (p.ticker||'') + '\',\'' + (p.side||'') + '\',' + (p.premium_entry||0) + ',' + (p.contracts||1) + ',\'' + (p.signal_code||'') + '\')"'
+          + ' class="px-2 py-0.5 rounded text-xs font-bold text-white hover:opacity-80" style="background:#b45309">Cerrar</button>'
+          + '</td>'
+          + '</tr>';
+      }).join('');
+      el.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-600 text-left border-b border-gray-800">'
+        + '<th class="pb-1 pr-2">TICKER</th><th class="pb-1 pr-2">LADO</th><th class="pb-1 pr-2">STRIKE</th>'
+        + '<th class="pb-1 pr-2">EXP</th><th class="pb-1 pr-2">ENTRY</th><th class="pb-1 pr-2">CTOS</th>'
+        + '<th class="pb-1 pr-2">FECHA</th><th class="pb-1 pr-2">SEÑAL</th><th class="pb-1">ACCIÓN</th>'
+        + '</tr></thead><tbody>' + rows + '</tbody></table>';
+    } catch(err) {
+      el.innerHTML = '<p class="text-red-500 text-xs">Error: ' + err.message + '</p>';
+    }
+  }
 
-  // ── Schwab image analyzer ────────────────────────────────────────────────────
+  function prefillClosePosition(tradeId, ticker, side, premiumEntry, contracts, signalCode) {
+    // Pre-rellenar el formulario para registrar el cierre
+    function setSelect(id, val) {
+      var s = document.getElementById(id);
+      if (!s || !val) return;
+      for (var i = 0; i < s.options.length; i++) {
+        if (s.options[i].value === val || s.options[i].text === val) { s.selectedIndex = i; return; }
+      }
+    }
+    setSelect('t-ticker', ticker);
+    setSelect('t-side', side);
+    document.getElementById('t-contracts').value = contracts;
+    document.getElementById('t-entry').value = premiumEntry;
+    document.getElementById('t-exit').value = '';
+    document.getElementById('t-signal-code').value = signalCode || '';
+    // Marcar que es un cierre de posición existente
+    if (!_schwabData) _schwabData = {};
+    _schwabData.entry_date = null; // la fecha de entry ya está en el registro original
+    _schwabData.exit_date  = new Date().toISOString().split('T')[0];
+    // Scroll al formulario con aviso
+    var msg = document.getElementById('trade-msg');
+    msg.textContent = '🔵 Registrando cierre de ' + ticker + ' ' + side + ' — ingresa la PRIMA SALIDA y guarda';
+    msg.className = 'text-xs mt-2 text-center text-blue-400';
+    msg.classList.remove('hidden');
+    document.getElementById('trade-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    calcResult();
+  }
+
+  window.addEventListener('load', function() { loadTrades(); loadOpenPositions(); });
+
+  // ── Schwab image analyzer (llamado también desde showExtractedFields) ─────────
   var WATCHER = 'http://127.0.0.1:9224';
   var _schwabFile = null;
   var _schwabData = null;
@@ -994,16 +1098,19 @@ export function generateHtml(briefData, date) {
     }
   }
 
-  function showExtractedFields(f) {
+  async function showExtractedFields(f) {
+    var statusLabel = { open: '🟡 ABIERTA', closed: '🔴 CERRADA', exit_only: '🔵 SOLO CIERRE' };
+    var resultCls = f.result_pct != null ? (f.result_pct >= 0 ? 'text-green-400' : 'text-red-400') : 'text-gray-400';
+
     var items = [
-      ['TICKER', f.ticker],
-      ['LADO', f.side],
-      ['STRIKE', f.strike != null ? '$' + f.strike : null],
-      ['EXPIRACIÓN', f.expiration],
+      ['TICKER',        f.ticker],
+      ['LADO',          f.side],
+      ['STRIKE',        f.strike != null ? '$' + f.strike : null],
+      ['EXPIRACIÓN',    f.expiration],
+      ['CONTRATOS',     f.contracts],
+      ['MODO',          f.mode],
       ['PRIMA ENTRADA', f.premium_entry != null ? '$' + f.premium_entry : null],
-      ['PRIMA SALIDA', f.premium_exit != null ? '$' + f.premium_exit : null],
-      ['CONTRATOS', f.contracts],
-      ['MODO', f.mode]
+      ['PRIMA SALIDA',  f.premium_exit  != null ? '$' + f.premium_exit  : null],
     ];
     var fieldsHtml = items.map(function(item) {
       var val = item[1] != null ? String(item[1]) : '—';
@@ -1012,33 +1119,61 @@ export function generateHtml(briefData, date) {
         + '<span class="' + cls + '">' + val + '</span></div>';
     }).join('');
 
-    // Estrategia sugerida del día
-    var suggested = (f.ticker && f.side) ? suggestStrategy(f.ticker, f.side) : null;
-    var confLabel = { conditions_met: '⭐ ACTIVO', setup_forming: '🔶 SETUP', watch: '👁 WATCH' };
-    var stratHtml;
-    if (suggested) {
-      var badge = confLabel[suggested.confidence] || suggested.confidence;
-      stratHtml = '<div class="col-span-4 mt-2 pt-2 border-t border-green-900/40 flex items-center gap-2">'
-        + '<span class="text-gray-500 text-xs">ESTRATEGIA PROPUESTA HOY</span>'
-        + '<span class="font-bold text-white">' + suggested.id + '</span>'
-        + '<span class="text-xs px-1.5 py-0.5 rounded font-bold" style="background:#1c3a1c;color:#86efac">' + badge + '</span>'
-        + (suggested.note ? '<span class="text-gray-500 text-xs truncate">' + suggested.note + '</span>' : '')
-        + '</div>';
-    } else if (f.ticker && f.side) {
-      stratHtml = '<div class="col-span-4 mt-2 pt-2 border-t border-yellow-900/40">'
-        + '<span class="text-yellow-500 text-xs">⚠️ No hay estrategia propuesta hoy para ' + (f.ticker || '') + ' ' + (f.side || '') + ' — seleccionar manualmente</span>'
-        + '</div>';
-    } else {
-      stratHtml = '';
-    }
+    // Resultado + status de posición
+    var resultHtml = '<div class="col-span-4 flex items-center gap-4 mt-1 pt-2 border-t border-gray-800">'
+      + '<span class="text-gray-500 text-xs">POSICIÓN</span>'
+      + '<span class="text-xs font-bold text-white">' + (statusLabel[f.status] || f.status || '—') + '</span>'
+      + (f.result_pct != null
+        ? '<span class="' + resultCls + ' font-bold text-sm ml-2">'
+          + (f.result_pct >= 0 ? '+' : '') + f.result_pct + '%</span>'
+        : '')
+      + (f.entry_date ? '<span class="text-gray-600 text-xs ml-auto">Entrada: ' + f.entry_date + '</span>' : '')
+      + (f.exit_date  ? '<span class="text-gray-600 text-xs ml-1">Salida: '  + f.exit_date  + '</span>' : '')
+      + '</div>';
 
-    document.getElementById('schwab-extracted-fields').innerHTML = fieldsHtml + stratHtml;
+    // ── Señales exactas desde Supabase ────────────────────────────────────────
+    var signalHtml = '<div class="col-span-4 mt-2 pt-2 border-t border-blue-900/40">'
+      + '<div class="text-blue-400 text-xs font-bold mb-1">SEÑAL EXACTA PROPUESTA — elige la que ejecutaste</div>';
+
+    try {
+      var today = '${dateStr}';
+      var url = SB_URL + '/rest/v1/signals?select=signal_code,strategy,side,confidence,note'
+        + '&date=eq.' + today
+        + (f.ticker ? '&ticker=eq.' + f.ticker : '')
+        + (f.side   ? '&side=eq.'   + f.side   : '')
+        + '&order=confidence.asc';
+      var sr = await fetch(url, { headers: sbHeaders() });
+      var sigs = sr.ok ? await sr.json() : [];
+
+      if (sigs.length) {
+        var confBadge = { conditions_met: '⭐', setup_forming: '🔶', watch: '👁' };
+        signalHtml += '<div id="signal-picker" class="space-y-1">'
+          + sigs.map(function(sig, i) {
+            return '<label class="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-blue-900/20">'
+              + '<input type="radio" name="signal_pick" value="' + sig.signal_code + '" data-strategy="' + sig.strategy + '"'
+              + (i === 0 ? ' checked' : '') + ' class="accent-blue-500">'
+              + '<span class="text-white font-bold text-xs">' + sig.strategy + '</span>'
+              + '<span class="text-blue-300 text-xs">' + (confBadge[sig.confidence] || '') + ' ' + (sig.confidence || '') + '</span>'
+              + (sig.note ? '<span class="text-gray-500 text-xs truncate">' + sig.note + '</span>' : '')
+              + '</label>';
+          }).join('') + '</div>';
+      } else {
+        signalHtml += '<div class="text-yellow-500 text-xs">⚠️ Sin señales para ' + (f.ticker||'') + ' ' + (f.side||'') + ' hoy'
+          + ' — selecciona la estrategia manualmente en el formulario</div>';
+      }
+    } catch(e) {
+      signalHtml += '<div class="text-gray-600 text-xs">No se pudieron cargar señales: ' + e.message + '</div>';
+    }
+    signalHtml += '</div>';
+
+    document.getElementById('schwab-extracted-fields').innerHTML = fieldsHtml + resultHtml + signalHtml;
     document.getElementById('schwab-extracted').classList.remove('hidden');
   }
 
   function fillFormFromSchwab() {
     var f = _schwabData;
     if (!f) return;
+
     function setSelect(id, val) {
       var s = document.getElementById(id);
       if (!s || val == null) return;
@@ -1047,28 +1182,30 @@ export function generateHtml(briefData, date) {
         if (s.options[i].value === v || s.options[i].text === v) { s.selectedIndex = i; return; }
       }
     }
-    setSelect('t-ticker', f.ticker);
-    setSelect('t-side', f.side);
-    setSelect('t-mode', f.mode || 'real');
-    if (f.strike != null) document.getElementById('t-strike').value = f.strike;
-    if (f.expiration) document.getElementById('t-expiry').value = f.expiration;
-    if (f.premium_entry != null) { document.getElementById('t-entry').value = f.premium_entry; }
-    if (f.premium_exit != null) { document.getElementById('t-exit').value = f.premium_exit; }
-    if (f.contracts != null) document.getElementById('t-contracts').value = f.contracts;
 
-    // Auto-seleccionar estrategia sugerida del día
-    var suggested = (f.ticker && f.side) ? suggestStrategy(f.ticker, f.side) : null;
-    if (suggested) {
-      setSelect('t-strategy', suggested.id);
-    }
+    // Leer señal seleccionada en el picker
+    var picked = document.querySelector('input[name="signal_pick"]:checked');
+    var signalCode   = picked ? picked.value                       : '';
+    var strategyPicked = picked ? picked.dataset.strategy          : '';
+
+    setSelect('t-ticker', f.ticker);
+    setSelect('t-side',   f.side);
+    setSelect('t-mode',   f.mode || 'real');
+    if (f.strike      != null) document.getElementById('t-strike').value    = f.strike;
+    if (f.expiration)          document.getElementById('t-expiry').value    = f.expiration;
+    if (f.premium_entry != null) document.getElementById('t-entry').value   = f.premium_entry;
+    if (f.premium_exit  != null) document.getElementById('t-exit').value    = f.premium_exit;
+    if (f.contracts     != null) document.getElementById('t-contracts').value = f.contracts;
+
+    // Señal exacta elegida
+    if (strategyPicked) setSelect('t-strategy', strategyPicked);
+    document.getElementById('t-signal-code').value = signalCode;
 
     calcResult();
-    // Reset sección Schwab
     document.getElementById('schwab-extracted').classList.add('hidden');
     document.getElementById('schwab-ready').classList.add('hidden');
     document.getElementById('schwab-idle').classList.remove('hidden');
     _schwabFile = null;
-    // Scroll al formulario
     document.getElementById('trade-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 
@@ -1106,8 +1243,35 @@ export async function savePremarketReport({ content, date, brief_data } = {}) {
     }
   }
 
-  // Persistir en Supabase (no bloquea si falla)
+  // Persistir sesión en Supabase
   const sbResult = await savePremarketSession(dateStr, content, briefObj).catch(() => ({ saved: false }));
+
+  // Extraer y guardar señales de los strategy_candidates del brief
+  let signalsResult = { saved: false, count: 0 };
+  if (briefObj?.symbols_scanned?.length) {
+    const dateNoHyphen = dateStr.replace(/-/g, "");
+    const signals = [];
+    for (const sym of briefObj.symbols_scanned) {
+      for (const cand of sym.strategy_candidates || []) {
+        if (!cand.id || !cand.position) continue;
+        const stratSlug = cand.id.replace(/[^A-Z0-9]/gi, "");
+        signals.push({
+          signal_code: `${dateNoHyphen}-${sym.symbol}-${cand.position}-${stratSlug}`,
+          date: dateStr,
+          session_id: sbResult.id || null,
+          ticker: sym.symbol,
+          strategy: cand.id,
+          side: cand.position,
+          confidence: cand.confidence || null,
+          note: cand.note || null,
+          source: "premarket",
+        });
+      }
+    }
+    if (signals.length) {
+      signalsResult = await saveSignals(signals).catch(() => ({ saved: false, count: 0 }));
+    }
+  }
 
   return {
     success: true,
@@ -1115,6 +1279,7 @@ export async function savePremarketReport({ content, date, brief_data } = {}) {
     html_path: htmlPath,
     date: dateStr,
     supabase: sbResult,
+    signals: signalsResult,
   };
 }
 
