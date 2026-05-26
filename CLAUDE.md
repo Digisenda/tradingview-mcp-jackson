@@ -186,90 +186,92 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
     Si falta alguno → chart_manage_indicator para agregarlo.
     ⚠️ NO llamar draw_clear aquí — las líneas anteriores ya fueron eliminadas por drawn_lines_clear al inicio del checklist.
 
-  PASO 1 — Bollinger Bands D1  [peso 50%]
-    (ya en D1 desde PASO 0)
-    Leer: BB upper, BB middle, BB lower del data_get_study_values
-    Evaluar tendencia D1 con BB:
-      - Precio cerca de banda superior y alejándose del middle → tendencia alcista → BB middle = PISO
-      - Precio cerca de banda inferior y alejándose del middle → tendencia bajista → BB middle = TECHO
-      - Precio oscilando entre bandas sin dirección clara → LATERAL
-    ⚠️ SOLO dibujar BB middle D1 si tiene tendencia (alcista o bajista).
-       Si está LATERAL → NO dibujar. El precio fluctúa entre bandas sin rebote definido.
-    draw_shape(horizontal_line, precio=BB_middle_D1) → "BB D1 [TECHO/PISO]"
+  PASO 1 — BB Diario: Punto Medio  [peso 50%]
+    (ya en D desde PASO 0)
+    Nota: BB Middle D = MA20 D — es la misma línea, siempre es lo PRIMERO que se marca.
+    data_get_study_values() → leer BB upper, middle, lower
+    Evaluar tendencia D con BB:
+      - Precio cerca de banda superior alejándose del middle → ALCISTA → middle = PISO
+      - Precio cerca de banda inferior alejándose del middle → BAJISTA → middle = TECHO
+      - Precio oscilando entre bandas sin dirección → LATERAL
+    ⚠️ Solo dibujar si tiene tendencia (alcista o bajista). Si LATERAL → NO dibujar.
+    draw_shape(horizontal_line, precio=BB_middle_D) → "BB D [TECHO/PISO]"
 
-  PASO 2 — Bollinger Bands H1  [peso 50%]
+  PASO 2 — BB M15: Líneas de referencia en disipadores  [referencia visual apertura]
+    chart_set_timeframe("15")
+    data_get_study_values() → leer BB upper y BB lower en M15
+    Evaluar dirección de cada banda (siguiendo la tendencia del gráfico M15):
+      - Banda superior → draw_shape(trend_line) diagonal, color blanco
+      - Banda inferior → draw_shape(trend_line) diagonal, color blanco
+    ⚠️ Siempre trazar AMBAS bandas (superior e inferior), sin excepción.
+    ⚠️ Propósito: referencia visual para comparar cuando abre volatilidad al abrir el mercado.
+    ⚠️ NO trazar BB Middle M15 — solo los disipadores (bandas exterior superior e inferior).
+
+  PASO 3 — BB H + MAs H  [peso 50% BB / 30% MAs]
     chart_set_timeframe("60")
-    data_get_study_values() → leer BB H1 (upper, middle, lower)
-    Evaluar:
-      1. ¿Está el precio dentro de las bandas? → [dentro / fuera superior / fuera inferior]
-      2. ¿El BB middle H1 constituye techo o piso? (misma lógica que D1 pero en H1)
-    ⚠️ SOLO dibujar BB middle H1 si tiene tendencia. Si está LATERAL → NO dibujar.
-    draw_shape(horizontal_line, precio=BB_middle_H1) → "BB H1 [TECHO/PISO]"
+    data_get_study_values() → leer BB H1 (upper, middle, lower) + MA20, MA40, MA100, MA200
 
-  PASO 3 — Medias Móviles D1  [peso 30%]
+    ── BB H: SOLO OBSERVAR — no dibujar ─────────────────────────────────────
+    Nota: el usuario trabaja con 2 gráficos separados en H (BB chart y MAs chart).
+    Como Claude usa 1 solo chart, combinar ambos análisis en este paso.
+    Observar y reportar:
+      - ¿Precio dentro o fuera de las bandas? → [dentro / fuera sup / fuera inf]
+      - ¿Hasta dónde puede llegar el precio? (next band, middle, opposite band)
+      - Posibles escenarios de movimiento en H
+    NO dibujar BB Middle H1 — solo análisis visual/reportado.
+    ─────────────────────────────────────────────────────────────────────────
+
+    ── MAs H: Trazar según diagrama Investep ────────────────────────────────
+    La DIRECCIÓN individual de cada MA determina si es TECHO o PISO:
+      MA20 > MA40   → MA20 alcista  |  MA20 < MA40   → MA20 bajista
+      MA40 > MA100  → MA40 alcista  |  MA40 < MA100  → MA40 bajista
+      MA100 > MA200 → MA100 alcista |  MA100 < MA200 → MA100 bajista
+
+      ✅ MA alcista + precio encima → PISO  → draw_shape horizontal
+      ✅ MA bajista + precio debajo → TECHO → draw_shape horizontal
+      ❌ MA alcista + precio debajo → Continuación → NO dibujar
+      ❌ MA bajista + precio encima → Continuación → NO dibujar
+
+    Dibujar máx. 2 MAs por grupo (las más cercanas al precio actual).
+    IMPORTANTE: mientras más separadas las MAs de rebote → más probable el rebote.
+    ─────────────────────────────────────────────────────────────────────────
+
+    ── H-Lines: último HIGH arriba y último LOW abajo ────────────────────────
+    data_get_ohlcv(count: 100) → barras H1 individuales
+    Precio actual = quote_get(ticker).last
+
+    ARRIBA (sobre precio actual):
+      → H-Max 1: HIGH más reciente por encima del precio
+      → H-Max 2: siguiente HIGH más antiguo por encima del precio
+    ABAJO (bajo precio actual):
+      → H-Min 1: LOW más reciente por debajo del precio
+      → H-Min 2: siguiente LOW más antiguo por debajo del precio
+
+    draw_shape(horizontal_line, precio=H_Max1) → "TICKER Máx 1" (verde)
+    draw_shape(horizontal_line, precio=H_Max2) → "TICKER Máx 2" (verde claro)
+    draw_shape(horizontal_line, precio=H_Min1) → "TICKER Mín 1" (rojo)
+    draw_shape(horizontal_line, precio=H_Min2) → "TICKER Mín 2" (rojo claro)
+    ⚠️ Máx 4 H-Lines por ticker. Mientras más antiguo el nivel sin tocarse → mayor rebote.
+    ─────────────────────────────────────────────────────────────────────────
+
+  PASO 4 — MAs D: Trazar según diagrama Investep  [peso 30%]
     chart_set_timeframe("D")
     data_get_study_values() → leer MA20, MA40, MA100, MA200 y precio actual
 
-    ── Regla de clasificación por MA (basada en diagrama Investep) ───────────
-    La DIRECCIÓN individual de cada MA determina si es TECHO o PISO.
-    Determinar dirección de cada MA comparando su valor vs la MA del período siguiente:
-      MA20 > MA40   → MA20 va alcista  |  MA20 < MA40   → MA20 va bajista
-      MA40 > MA100  → MA40 va alcista  |  MA40 < MA100  → MA40 va bajista
-      MA100 > MA200 → MA100 va alcista |  MA100 < MA200 → MA100 va bajista
-      MA200: determinar por pendiente propia (comparar con su valor de sesiones anteriores)
+    Aplicar misma regla de dirección individual del PASO 3:
+      ✅ MA alcista + precio encima → PISO  → draw_shape horizontal
+      ✅ MA bajista + precio debajo → TECHO → draw_shape horizontal
+      ❌ MA alcista + precio debajo → Continuación → NO dibujar
+      ❌ MA bajista + precio encima → Continuación → NO dibujar
 
-    Para cada MA aplicar:
-      ✅ MA alcista (subiendo) + precio encima de ella → PISO  → draw_shape
-      ✅ MA bajista (bajando) + precio debajo de ella → TECHO → draw_shape
-      ❌ MA alcista (subiendo) + precio debajo de ella → Continuación → NO dibujar
-      ❌ MA bajista (bajando) + precio encima de ella → Continuación → NO dibujar
+    Escenarios típicos:
+      Alcista puro (precio > MA20 > MA40 > MA100 > MA200) → todas PISOS → dibujar 2 más cercanas
+      Bajista puro (MA200 > MA100 > MA40 > MA20 > precio) → todas TECHOS → dibujar 2 más cercanas
+      Mixto → clasificar cada MA individualmente y dibujar las que califican
 
-    Escenarios típicos (del diagrama):
-      Alcista puro (precio > MA20 > MA40 > MA100 > MA200):
-        → Todas las MAs son PISOS → dibujar las 2 más cercanas al precio
-      Bajista puro (MA200 > MA100 > MA40 > MA20 > precio):
-        → Todas las MAs son TECHOS → dibujar las 2 más cercanas al precio
-      Mixto (ej. MA40/MA20 bajistas arriba, MA100/MA200 alcistas abajo):
-        → MA40/MA20 = TECHOS | MA100/MA200 = PISOS → dibujar ambos grupos
-
-    ⚠️ Separación entre MAs: si las MAs que marcan tendencia se SEPARAN más
-       → tendencia fortaleciéndose (ej. bajista: precio rompe MA20 y llega a MA40
-         = intento de subida para seguir bajando, NO es rebote real).
-    ⚠️ Dibujar máximo las 2 MAs de rebote más cercanas al precio actual.
-    ──────────────────────────────────────────────────────────────────────────
-
-  PASO 4 — Medias Móviles H1 + H-Lines Máx/Mín  [peso 30%]
-    chart_set_timeframe("60")
-    data_get_study_values() → leer MA20, MA40, MA100, MA200 en H1
-    data_get_ohlcv(count: 100) → leer barras individuales para identificar H-Lines
-
-    Aplicar la misma regla de clasificación de PASO 3 para las MAs en H1.
-    Evaluar tendencia H1:
-      - Si MA20/MA40 van en sentido contrario a MA100/MA200 → clasificar cada grupo por separado
-      - IMPORTANTE: mientras más separadas las MAs de rebote entre sí, más probable el rebote
-
-    ── H-Lines: regla de identificación ──────────────────────────────────────
-    Precio actual = quote_get(ticker).last
-
-    HIGH-LINES (techo — encima del precio actual):
-      Buscar en las 100 barras H1 los HIGHs que superen el precio actual.
-      → Marcar el más RECIENTE (H-Max 1) y el SIGUIENTE más antiguo (H-Max 2).
-      Máximo 2 líneas arriba.
-
-    LOW-LINES (piso — debajo del precio actual):
-      Buscar en las 100 barras H1 los LOWs que estén por debajo del precio actual.
-      → Marcar el más RECIENTE (H-Min 1) y el SIGUIENTE más antiguo (H-Min 2).
-      Máximo 2 líneas abajo.
-
-    draw_shape(horizontal_line, precio=H_Max1) → "TICKER H1 Máx 1" (verde)
-    draw_shape(horizontal_line, precio=H_Max2) → "TICKER H1 Máx 2" (verde claro)
-    draw_shape(horizontal_line, precio=H_Min1) → "TICKER H1 Mín 1" (rojo)
-    draw_shape(horizontal_line, precio=H_Min2) → "TICKER H1 Mín 2" (rojo claro)
-
-    ⚠️ REGLA DE ORO: mientras más barras hayan pasado desde que se formó el nivel
-       sin que el precio lo haya tocado → MAYOR probabilidad de rebote al llegar ahí.
-    ⚠️ NO exceder 4 H-Lines por ticker (2 arriba + 2 abajo).
-    ──────────────────────────────────────────────────────────────────────────
+    ⚠️ Si MAs que marcan tendencia se SEPARAN más → tendencia fortaleciéndose
+       (ej. bajista: precio rompe MA20 y llega a MA40 = intento de subida para seguir bajando).
+    ⚠️ Dibujar máx. 2 MAs por grupo (las más cercanas al precio actual).
 
   PASO 5 — Líneas de tendencia
     (mantener el chart en H1 con BB visible)
