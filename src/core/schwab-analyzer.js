@@ -136,9 +136,34 @@ async function analyzeWithClaude(imageBase64, mediaType) {
   return fields;
 }
 
+// ─── Orígenes permitidos ──────────────────────────────────────────────────────
+// Solo aceptar peticiones desde el dashboard local (file://) o localhost.
+// Los browsers envían Origin: "null" para páginas abiertas desde file://.
+// Cualquier web externa tiene un origen real (https://...) y queda bloqueada.
+const ALLOWED_ORIGINS = new Set(["null", "http://localhost", "http://127.0.0.1"]);
+
+function getAllowedOrigin(reqOrigin) {
+  if (!reqOrigin) return null;                    // sin origen = curl/Node → permitir sin cabecera CORS
+  const base = reqOrigin.replace(/:\d+$/, "");    // quitar puerto si lo hay
+  return (ALLOWED_ORIGINS.has(reqOrigin) || ALLOWED_ORIGINS.has(base)) ? reqOrigin : null;
+}
+
 // ─── HTTP Server ──────────────────────────────────────────────────────────────
 const server = http.createServer(async (req, res) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  const reqOrigin = req.headers.origin || "";
+  const allowedOrigin = getAllowedOrigin(reqOrigin);
+
+  if (allowedOrigin) {
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    res.setHeader("Vary", "Origin");
+  } else if (reqOrigin) {
+    // Origen externo — rechazar preflight y peticiones reales
+    if (req.method === "OPTIONS") { res.writeHead(403); res.end(); return; }
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Origen no permitido" }));
+    return;
+  }
+
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
