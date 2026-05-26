@@ -174,6 +174,44 @@ Eliminar el ingreso manual de datos en el LOG TRADE: arrastrar una captura del h
 
 ---
 
+## FASE 9 — Corrección Metodología de Trazo (checklist) ✅ COMPLETADA
+
+> Sesión: 2026-05-26 — revisión con transcripts Investep Academy + diagrama "Trazo MMs segun tendencia.png"
+
+### Origen de la metodología
+La metodología proviene de **Investep Academy** (transcripts en `docs/checklist/`).  
+El `CHECKLIST JUAN.md` es la destilación personal de Juan de esas clases.  
+Fuente de verdad: `docs/checklist/` (5 archivos: transcripts + diagrama PNG).
+
+### Correcciones aplicadas en `CLAUDE.md`
+
+| Elemento | Antes (incorrecto) | Ahora (correcto) |
+|----------|-------------------|-----------------|
+| BB Middle | Se dibujaba siempre | Solo si hay tendencia — LATERAL → no dibujar |
+| BB M15 | No existía en el flujo | 2 líneas diagonales blancas, proyección hacia adelante en ambas bandas |
+| BB H1 | Se dibujaba el middle | Solo OBSERVAR — no dibujar nada |
+| MAs clasificación | "A favor de tendencia global" | Dirección individual de cada MA (diagrama Investep) |
+| H-Lines | High/low de últimas 20 barras | Último HIGH sobre precio + siguiente más antiguo / Último LOW bajo precio + siguiente más antiguo (máx 4) |
+| Pasos del checklist | 4 pasos BB+MAs mezclados | 4 pasos claros: BB D → BB M15 → H (BB obs + MAs) → MAs D |
+
+### Regla MAs (diagrama Investep — 4 escenarios)
+- MA alcista + precio encima → **PISO** → dibujar
+- MA bajista + precio debajo → **TECHO** → dibujar
+- MA alcista + precio debajo → Continuación → NO dibujar
+- MA bajista + precio encima → Continuación → NO dibujar
+- Dirección de MA = comparar con período siguiente (MA20>MA40 → MA20 alcista, etc.)
+
+### BB M15 diagonal — propósito exacto
+Proyección anticipada de hacia dónde van las bandas. Al abrir el mercado:
+- Banda real sigue proyección → dirección confirmada
+- Banda real se desvía → cambio de volatilidad → esperar/reevaluar
+
+### Pendiente de esta fase
+- [ ] Probar en checklist real y ajustar (depuración programada para 2026-05-27)
+- [ ] Verificar que `draw_shape trend_line` acepta puntos futuros para la proyección M15
+
+---
+
 ## PENDIENTES DE TRANSCRIPCIÓN ⏳ (depuración #18 y #21)
 
 > **Bloqueados** hasta que Juan suba la transcripción del video.
@@ -298,6 +336,7 @@ Rediseñar el output del checklist para que sea **escaneable en < 30 segundos po
 | 6 | Schwab screenshot analyzer + Dashboard LOG TRADE | ✅ Completada — 2026-05-25 |
 | 7 | Pinecone RAG Integration | ⏳ Pendiente — 4 preguntas previas |
 | **8** | **Optimización del reporte premarket (menos extenso)** | **⏳ Pendiente — 2026-05-26** |
+| **9** | **Corrección metodología de trazo (Investep + diagrama MMs)** | **✅ Completada — 2026-05-26** |
 | #18 | Líneas exactas por ticker (checklist draw) | 🔴 Bloqueado — pendiente transcripción |
 | #21 | Estrategia "BB vol + gap up" CALL (STRAT-12) | 🔴 Bloqueado — pendiente transcripción |
 
