@@ -260,6 +260,32 @@ pinecone.query(top_k=3) → contexto cualitativo al reporte
 
 ---
 
+## FASE 8 — Optimización del Reporte Premarket ⏳ PENDIENTE
+
+> Registrado: 2026-05-26 — feedback de sesión real
+
+### Problema
+El informe generado por el checklist premarket (7 pasos × 6 tickers) es **demasiado extenso y complejo** para su uso durante la ventana operativa (9:30–11:30 AM ET). El volumen de texto dificulta la toma rápida de decisiones.
+
+### Objetivo
+Rediseñar el output del checklist para que sea **escaneable en < 30 segundos por ticker** — sin perder la información crítica de BB, MAs y estrategias candidatas.
+
+### Dirección esperada
+- Eliminar texto redundante y pasos intermedios del output de Claude
+- El reporte en Claude debe ser un **resumen ejecutivo** (5–8 líneas por ticker max)
+- El detalle completo queda en el dashboard HTML — Claude solo muestra lo accionable
+- Distinguir claramente: **"operar hoy"** vs **"vigilar"** vs **"no operar"**
+- Posiblemente separar el flujo en dos fases: recolección silenciosa de datos → output final condensado
+
+### Checklist de implementación
+- [ ] Definir con Juan el formato ideal del output por ticker (qué sí, qué no)
+- [ ] Revisar prompt / instrucciones en `CLAUDE.md` — reducir verbosidad del flujo completo
+- [ ] Ajustar sección "Output esperado por ticker" en `CLAUDE.md`
+- [ ] Posible: añadir modo `--brief` al checklist que suprime pasos intermedios
+- [ ] Probar en sesión real y medir tiempo de lectura
+
+---
+
 ## Resumen de Estado
 
 | Fase | Descripción | Estado |
@@ -271,9 +297,11 @@ pinecone.query(top_k=3) → contexto cualitativo al reporte
 | 5 | Supabase persistence + signal architecture | ✅ Completada — 2026-05-24 |
 | 6 | Schwab screenshot analyzer + Dashboard LOG TRADE | ✅ Completada — 2026-05-25 |
 | 7 | Pinecone RAG Integration | ⏳ Pendiente — 4 preguntas previas |
+| **8** | **Optimización del reporte premarket (menos extenso)** | **⏳ Pendiente — 2026-05-26** |
 | #18 | Líneas exactas por ticker (checklist draw) | 🔴 Bloqueado — pendiente transcripción |
 | #21 | Estrategia "BB vol + gap up" CALL (STRAT-12) | 🔴 Bloqueado — pendiente transcripción |
 
 **Próximas sesiones:**
+- **Fase 8 (prioridad alta):** rediseñar output del checklist — más corto, más accionable
 - **Cuando Juan suba transcripción:** implementar #18 (líneas por ticker en `CLAUDE.md`) y #21 (STRAT-12 en `rules.json` + `screenStrategies()`)
 - **Pinecone RAG (Fase 7):** requiere confirmar 4 preguntas sobre el índice — ver `docs/pinecone-rag-integration/PLAN.md`
