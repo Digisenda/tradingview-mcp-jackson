@@ -334,25 +334,47 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
 - Máximo 4 líneas por ticker (2 arriba + 2 abajo) — no exceder
 - ⚠️ Mientras más barras hayan pasado sin que el precio toque ese nivel → MAYOR fuerza de rebote
 
-### Output esperado por ticker
+### Output del checklist — Briefing de Operaciones
+
+**Regla crítica de output:** Durante los pasos 1–4 Claude recolecta datos en silencio.
+NO generar texto de análisis por paso. Al terminar los 6 tickers → generar UN SOLO briefing consolidado.
+
+**Formato del briefing (copiar exactamente esta estructura):**
+
 ```
-TICKER: AAPL
-  BB D1   — Middle: $XXX → [TECHO / PISO / Neutro] | Tendencia BB D1: [Alcista / Bajista / Lateral]
-  BB H1   — Precio [dentro / fuera sup / fuera inf] de bandas. Middle H1: $XXX → [TECHO / PISO]
-  MAs D1  — Tendencia: [Alcista / Bajista / Lateral]
-            Rebotes próximos (a favor tendencia): MA20 @ $XXX | MA40 @ $XXX
-            MAs en contra (continuación): MA100 @ $XXX | MA200 @ $XXX
-  MAs H1  — Tendencia corto: [Alcista / Bajista / Mixta (MA20/40 vs MA100/200)]
-            Rebote más cercano: MAXX @ $XXX (separación vs siguiente: $X.XX)
-            Máx reciente: $XXX | Mín reciente: $XXX
-  Trendlines — Marcar manualmente en gráfico BB H1 conectando [máximos / mínimos]
-  Bid/Ask    — Verificar spread y calcular strike manualmente antes de entrar
-  Premarket  — Precio: $XXX | Apertura estimada: [Gap Up / Gap Down / Flat]
-  ESTRATEGIAS POSIBLES:
-    conditions_met → [STRAT-XX CALL/PUT: descripción corta]
-    setup_forming  → [STRAT-XX CALL/PUT: qué falta para activarse]
-    watch          → [STRAT-XX CALL/PUT: condición a vigilar]
+━━━ PREMARKET YYYY-MM-DD | HH:MM AM ET ━━━━━━━━━━━━━━━━
+⚠️  FED: [OK (próximo DD/MM) / HOY → precaución]  |  [TICKER: EARNINGS DD/MM → no operar]
+
+🟢 EJECUTAR AL ABRIR
+─────────────────────────────────────────────────────────
+[TICKER]  [CALL/PUT]  [STRAT-XX]  |  Prima: $X.XX–X.XX  |  +XX% / -XX%
+          ✅ [condición confirmada]  ✅ [condición confirmada]  ✅ [condición confirmada]
+
+🟡 VIGILAR — falta confirmación
+─────────────────────────────────────────────────────────
+[TICKER]  [CALL/PUT]  [STRAT-XX]  |  Prima: $X.XX–X.XX  |  +XX% / -XX%
+          ✅ [condición confirmada]  ✅ [condición confirmada]
+          🔲 [qué falta ver al abrir]  🔲 [qué falta ver al abrir]
+
+🔴 NO OPERAR
+─────────────────────────────────────────────────────────
+[TICKER]  → [razón en una línea: Earnings / BB lateral / sin volatilidad / etc.]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
+
+**Reglas de clasificación:**
+- 🟢 EJECUTAR — todas las condiciones de la estrategia confirmadas en premarket
+- 🟡 VIGILAR  — al menos 1 condición clave falta (se confirma cuando abre el mercado)
+- 🔴 NO OPERAR — filtro activo (FED/Earnings) O BB lateral O sin volatilidad D+H
+
+**Reglas de contenido:**
+- Estrategia = título del bloque, no al final
+- ✅ = condición ya visible en el gráfico premarket
+- 🔲 = condición a confirmar cuando abre el mercado (M15 vol, PM virando, ruptura de nivel)
+- Prima = rango óptimo según rules.json asset_config para ese ticker
+- Target/Stop = siempre visible. Usar +12% / -25% por defecto hasta que se configure por estrategia
+- FED y Earnings = SIEMPRE en el header — es el primer dato que se lee
+- Bid/Ask, Trendlines, valores exactos de MAs → van al dashboard HTML, NO al briefing de Claude
 
 ### Paso final — Guardar reporte y líneas
 
