@@ -192,8 +192,10 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
     Evaluar tendencia D1 con BB:
       - Precio cerca de banda superior y alejándose del middle → tendencia alcista → BB middle = PISO
       - Precio cerca de banda inferior y alejándose del middle → tendencia bajista → BB middle = TECHO
-      - Precio oscilando alrededor del middle → lateral
-    draw_shape(horizontal_line, precio=BB_middle_D1) → marcar con etiqueta "BB D1 Middle [TECHO/PISO]"
+      - Precio oscilando entre bandas sin dirección clara → LATERAL
+    ⚠️ SOLO dibujar BB middle D1 si tiene tendencia (alcista o bajista).
+       Si está LATERAL → NO dibujar. El precio fluctúa entre bandas sin rebote definido.
+    draw_shape(horizontal_line, precio=BB_middle_D1) → "BB D1 [TECHO/PISO]"
 
   PASO 2 — Bollinger Bands H1  [peso 50%]
     chart_set_timeframe("60")
@@ -201,34 +203,73 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
     Evaluar:
       1. ¿Está el precio dentro de las bandas? → [dentro / fuera superior / fuera inferior]
       2. ¿El BB middle H1 constituye techo o piso? (misma lógica que D1 pero en H1)
-         → Tenerlo presente como PUNTO DE REBOTE en el análisis intraday
-    draw_shape(horizontal_line, precio=BB_middle_H1) → marcar si es techo o piso relevante
+    ⚠️ SOLO dibujar BB middle H1 si tiene tendencia. Si está LATERAL → NO dibujar.
+    draw_shape(horizontal_line, precio=BB_middle_H1) → "BB H1 [TECHO/PISO]"
 
   PASO 3 — Medias Móviles D1  [peso 30%]
     chart_set_timeframe("D")
-    data_get_study_values() → leer MA20, MA40, MA100, MA200
-    Determinar tendencia D1 por posición de precio vs MAs:
-      - Precio sobre MA20 > MA40 > MA100 > MA200 (en orden descendente) → ALCISTA
-      - Precio bajo MA20 < MA40 < MA100 < MA200 → BAJISTA
-      - MAs entrelazadas o cruzadas → LATERAL
-    Aplicar reglas de rebote (CRÍTICO):
-      - MAs a FAVOR de la tendencia = puntos de rebote → marcarlas
-      - MAs en CONTRA de la tendencia = puntos de continuación (el precio las rompe sin rebotar)
-      - Si las MAs que marcan tendencia se SEPARAN más → tendencia fortaleciéndose
-        (ej. bajista: precio rompe MA20 y llega a MA40 = intento de subida para seguir bajando)
-    Identificar las 2 MAs de rebote más próximas al precio actual y reportarlas.
+    data_get_study_values() → leer MA20, MA40, MA100, MA200 y precio actual
 
-  PASO 4 — Medias Móviles H1 + Máx/Mín reciente  [peso 30%]
+    ── Regla de clasificación por MA (basada en diagrama Investep) ───────────
+    La DIRECCIÓN individual de cada MA determina si es TECHO o PISO.
+    Determinar dirección de cada MA comparando su valor vs la MA del período siguiente:
+      MA20 > MA40   → MA20 va alcista  |  MA20 < MA40   → MA20 va bajista
+      MA40 > MA100  → MA40 va alcista  |  MA40 < MA100  → MA40 va bajista
+      MA100 > MA200 → MA100 va alcista |  MA100 < MA200 → MA100 va bajista
+      MA200: determinar por pendiente propia (comparar con su valor de sesiones anteriores)
+
+    Para cada MA aplicar:
+      ✅ MA alcista (subiendo) + precio encima de ella → PISO  → draw_shape
+      ✅ MA bajista (bajando) + precio debajo de ella → TECHO → draw_shape
+      ❌ MA alcista (subiendo) + precio debajo de ella → Continuación → NO dibujar
+      ❌ MA bajista (bajando) + precio encima de ella → Continuación → NO dibujar
+
+    Escenarios típicos (del diagrama):
+      Alcista puro (precio > MA20 > MA40 > MA100 > MA200):
+        → Todas las MAs son PISOS → dibujar las 2 más cercanas al precio
+      Bajista puro (MA200 > MA100 > MA40 > MA20 > precio):
+        → Todas las MAs son TECHOS → dibujar las 2 más cercanas al precio
+      Mixto (ej. MA40/MA20 bajistas arriba, MA100/MA200 alcistas abajo):
+        → MA40/MA20 = TECHOS | MA100/MA200 = PISOS → dibujar ambos grupos
+
+    ⚠️ Separación entre MAs: si las MAs que marcan tendencia se SEPARAN más
+       → tendencia fortaleciéndose (ej. bajista: precio rompe MA20 y llega a MA40
+         = intento de subida para seguir bajando, NO es rebote real).
+    ⚠️ Dibujar máximo las 2 MAs de rebote más cercanas al precio actual.
+    ──────────────────────────────────────────────────────────────────────────
+
+  PASO 4 — Medias Móviles H1 + H-Lines Máx/Mín  [peso 30%]
     chart_set_timeframe("60")
     data_get_study_values() → leer MA20, MA40, MA100, MA200 en H1
-    data_get_ohlcv(summary: true, count: 20) → obtener high y low del rango reciente
+    data_get_ohlcv(count: 100) → leer barras individuales para identificar H-Lines
+
+    Aplicar la misma regla de clasificación de PASO 3 para las MAs en H1.
     Evaluar tendencia H1:
-      - Si MA20/MA40 van en sentido contrario a MA100/MA200 → MA20/MA40 = tendencia a corto plazo
-      - Analizar posición del precio vs MAs H1 más cercanas que constituyan piso o techo
+      - Si MA20/MA40 van en sentido contrario a MA100/MA200 → clasificar cada grupo por separado
       - IMPORTANTE: mientras más separadas las MAs de rebote entre sí, más probable el rebote
-    draw_shape(horizontal_line, precio=ohlcv.high) → "TICKER H1 Máx" (verde)
-    draw_shape(horizontal_line, precio=ohlcv.low)  → "TICKER H1 Mín" (rojo)
-    IMPORTANTE: mientras más antiguo sea el nivel H-line, mayor probabilidad de rebote.
+
+    ── H-Lines: regla de identificación ──────────────────────────────────────
+    Precio actual = quote_get(ticker).last
+
+    HIGH-LINES (techo — encima del precio actual):
+      Buscar en las 100 barras H1 los HIGHs que superen el precio actual.
+      → Marcar el más RECIENTE (H-Max 1) y el SIGUIENTE más antiguo (H-Max 2).
+      Máximo 2 líneas arriba.
+
+    LOW-LINES (piso — debajo del precio actual):
+      Buscar en las 100 barras H1 los LOWs que estén por debajo del precio actual.
+      → Marcar el más RECIENTE (H-Min 1) y el SIGUIENTE más antiguo (H-Min 2).
+      Máximo 2 líneas abajo.
+
+    draw_shape(horizontal_line, precio=H_Max1) → "TICKER H1 Máx 1" (verde)
+    draw_shape(horizontal_line, precio=H_Max2) → "TICKER H1 Máx 2" (verde claro)
+    draw_shape(horizontal_line, precio=H_Min1) → "TICKER H1 Mín 1" (rojo)
+    draw_shape(horizontal_line, precio=H_Min2) → "TICKER H1 Mín 2" (rojo claro)
+
+    ⚠️ REGLA DE ORO: mientras más barras hayan pasado desde que se formó el nivel
+       sin que el precio lo haya tocado → MAYOR probabilidad de rebote al llegar ahí.
+    ⚠️ NO exceder 4 H-Lines por ticker (2 arriba + 2 abajo).
+    ──────────────────────────────────────────────────────────────────────────
 
   PASO 5 — Líneas de tendencia
     (mantener el chart en H1 con BB visible)
@@ -250,16 +291,31 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
 ### Reglas de análisis — lógica de rebotes (CRÍTICO)
 
 **Bollinger Bands:**
-- BB middle D1 = soporte/resistencia dinámica de mayor peso
+- BB middle D1/H1 = soporte/resistencia dinámica de mayor peso
+- ⚠️ BB middle se marca SOLO si tiene tendencia (alcista o bajista). Si está LATERAL → no se marca.
 - Precio dentro de bandas H1 = movimiento normal; fuera de banda = sobreextensión → rebote probable
 - BB middle H1 actúa como imán intraday → si precio lo supera con fuerza, confirma dirección
 
-**Medias Móviles:**
-- MAs CON la tendencia → constituyen piso (alcista) o techo (bajista) → punto de rebote
-- MAs CONTRA la tendencia → el precio las rompe sin rebotar (son puntos de continuación)
-- MAs separándose → tendencia fortaleciéndose → no esperar rebote rápido
-- MAs H1 más separadas entre sí → mayor fuerza del nivel de rebote
-- H-lines de máx/mín: mientras más antiguo el nivel, mayor es su relevancia
+**Medias Móviles — regla por dirección individual (diagrama Investep):**
+
+| Dirección MA | Posición vs precio | Clasificación | Dibujar |
+|---|---|---|---|
+| Alcista (subiendo) | Debajo del precio | PISO ✅ | Sí |
+| Bajista (bajando) | Encima del precio | TECHO ✅ | Sí |
+| Alcista (subiendo) | Encima del precio | Continuación ❌ | No |
+| Bajista (bajando) | Debajo del precio | Continuación ❌ | No |
+
+- Dirección de cada MA = su valor vs el período siguiente (MA20>MA40 → MA20 alcista, etc.)
+- MAs separándose entre sí → tendencia fortaleciéndose → rebote más débil o inexistente
+- Dibujar máx. 2 MAs por grupo (las más cercanas al precio actual)
+
+**H-Lines (Máx/Mín en H1):**
+- Identificar el HIGH más reciente POR ENCIMA del precio actual → H-Max 1
+- Identificar el siguiente HIGH más antiguo por encima → H-Max 2
+- Identificar el LOW más reciente POR DEBAJO del precio actual → H-Min 1
+- Identificar el siguiente LOW más antiguo por debajo → H-Min 2
+- Máximo 4 líneas por ticker (2 arriba + 2 abajo) — no exceder
+- ⚠️ Mientras más barras hayan pasado sin que el precio toque ese nivel → MAYOR fuerza de rebote
 
 ### Output esperado por ticker
 ```
