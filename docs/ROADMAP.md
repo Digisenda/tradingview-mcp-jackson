@@ -174,6 +174,55 @@ Eliminar el ingreso manual de datos en el LOG TRADE: arrastrar una captura del h
 
 ---
 
+## PENDIENTES DE TRANSCRIPCIÓN ⏳ (depuración #18 y #21)
+
+> **Bloqueados** hasta que Juan suba la transcripción del video.
+> Una vez recibida, implementar en la misma sesión — son cambios acotados al checklist existente.
+
+---
+
+### #18 — Líneas exactas a dibujar por ticker 🔴 BLOQUEADO
+
+**Contexto:** Hoy `draw_shape` dibuja BB Middle D1, BB Middle H1 y H1 Máx/Mín para todos los tickers
+por igual. Juan quiere definir qué líneas específicas aplican a cada ticker según su comportamiento
+real (ej. SPY puede necesitar un nivel adicional; DIA puede no necesitar H1 Middle).
+
+**Qué falta:**
+- Transcripción del video donde Juan explica las reglas por ticker
+- Con esas reglas → actualizar la sección "PASO 3 — Medias Móviles D1" y "PASO 4 — MAs H1" en
+  `CLAUDE.md` con condiciones específicas por ticker
+
+**Checklist de implementación:**
+- [ ] Juan sube transcripción
+- [ ] Identificar reglas por ticker (qué líneas dibujar en qué condición)
+- [ ] Actualizar `CLAUDE.md` — flujo completo, sección de draw por ticker
+- [ ] Verificar con ejecución real del checklist
+
+---
+
+### #21 — Estrategia "BB con volatilidad": CALL en aperturas explosivas 🔴 BLOQUEADO
+
+**Contexto:** Nuevo setup identificado por Juan: BB M15 estrecho (baja volatilidad) + gap up en
+apertura = señal CALL de alta confianza. No está formalizado como STRAT en `rules.json` ni
+en el checklist — solo existe como observación empírica.
+
+**Qué falta:**
+- Transcripción del video donde Juan describe la lógica exacta (umbrales de BB M15 width,
+  qué constituye "gap up", condiciones adicionales de confirmaión)
+- Con esa lógica → agregar como STRAT-12 (o número disponible) en `rules.json`
+- Actualizar `screenStrategies()` en `src/core/morning.js` para detectarla
+- Documentar en `CLAUDE.md` como strategy candidate nuevo
+
+**Checklist de implementación:**
+- [ ] Juan sube transcripción
+- [ ] Definir: umbral BB M15 width "estrecho" (¿< 3? ¿< 2?), gap up mínimo (%)
+- [ ] Agregar a `rules.json` como nueva estrategia (STRAT-12 CALL)
+- [ ] Actualizar `screenStrategies()` en `src/core/morning.js`
+- [ ] Actualizar sección "Estrategias" en `CLAUDE.md`
+- [ ] Probar con checklist completo en la siguiente sesión de mercado
+
+---
+
 ## FASE 7 — Pinecone RAG Integration ⏳ PENDIENTE
 
 > Fuente: `docs/pinecone-rag-integration/PLAN.md` (plan completo aquí)
@@ -222,5 +271,9 @@ pinecone.query(top_k=3) → contexto cualitativo al reporte
 | 5 | Supabase persistence + signal architecture | ✅ Completada — 2026-05-24 |
 | 6 | Schwab screenshot analyzer + Dashboard LOG TRADE | ✅ Completada — 2026-05-25 |
 | 7 | Pinecone RAG Integration | ⏳ Pendiente — 4 preguntas previas |
+| #18 | Líneas exactas por ticker (checklist draw) | 🔴 Bloqueado — pendiente transcripción |
+| #21 | Estrategia "BB vol + gap up" CALL (STRAT-12) | 🔴 Bloqueado — pendiente transcripción |
 
-**Próxima sesión:** Fase 7 (Pinecone RAG) requiere confirmar 4 preguntas sobre el índice — ver `docs/pinecone-rag-integration/PLAN.md`.
+**Próximas sesiones:**
+- **Cuando Juan suba transcripción:** implementar #18 (líneas por ticker en `CLAUDE.md`) y #21 (STRAT-12 en `rules.json` + `screenStrategies()`)
+- **Pinecone RAG (Fase 7):** requiere confirmar 4 preguntas sobre el índice — ver `docs/pinecone-rag-integration/PLAN.md`
