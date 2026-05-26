@@ -175,19 +175,32 @@ function screenStrategies(price, tfData) {
     });
   }
 
-  // STRAT-08 CALL — Cambio tendencia M15 alcista
-  if (m15BBPos && ["below_middle", "below_lower", "at_middle"].includes(m15BBPos)) {
+  // STRAT-12 — Doble Green (Cambio de Tendencia 15m) — CALL y/o PUT
+  // CRÍTICO: precio debe estar DENTRO de bandas M15 (below_middle o at_middle para CALL;
+  //          above_middle o at_middle para PUT). "below_lower" / "above_upper" = FUERA de banda
+  //          → ese es territorio de STRAT-04/05, NO de Doble Green.
+  const insideBandsBullish = m15BBPos != null && ["below_middle", "at_middle"].includes(m15BBPos);
+  const insideBandsBearish = m15BBPos != null && ["above_middle", "at_middle"].includes(m15BBPos);
+  const d1BearishCtx = d1BBPos === "below_middle" || d1MAOrd === "bajista" || d1MAOrd === "mixto_bajista";
+  const d1BullishCtx = d1BBPos === "above_middle" || d1MAOrd === "alcista" || d1MAOrd === "mixto_alcista";
+
+  if (insideBandsBullish) {
     candidates.push({
-      id: "STRAT-08", position: "CALL", confidence: "watch",
-      note: "M15 bajista/lateral → vigilar ruptura trendline bajista M15 + apertura sobre BB Middle M15 con volatilidad",
+      id: "STRAT-12", position: "CALL",
+      confidence: d1BearishCtx ? "setup_forming" : "watch",
+      note: d1BearishCtx
+        ? "Doble Green CALL: D1 bajista ✅ + M15 dentro de banda bajo PM ✅ → falta: ruptura trendline M15 🔲 + apertura sobre BB Middle M15 con volatilidad 🔲"
+        : "Doble Green CALL: M15 dentro de banda bajo PM ✅ → falta: tendencia previa bajista D1/H1 🔲 + ruptura trendline M15 🔲 + apertura sobre PM M15 🔲",
     });
   }
 
-  // STRAT-09 PUT — Cambio tendencia M15 bajista
-  if (m15BBPos && ["above_middle", "above_upper", "at_middle"].includes(m15BBPos)) {
+  if (insideBandsBearish) {
     candidates.push({
-      id: "STRAT-09", position: "PUT", confidence: "watch",
-      note: "M15 alcista/lateral → vigilar ruptura trendline alcista M15 + apertura bajo BB Middle M15 con volatilidad",
+      id: "STRAT-12", position: "PUT",
+      confidence: d1BullishCtx ? "setup_forming" : "watch",
+      note: d1BullishCtx
+        ? "Doble Green PUT: D1 alcista ✅ + M15 dentro de banda sobre PM ✅ → falta: ruptura trendline M15 🔲 + apertura bajo BB Middle M15 con volatilidad 🔲"
+        : "Doble Green PUT: M15 dentro de banda sobre PM ✅ → falta: tendencia previa alcista D1/H1 🔲 + ruptura trendline M15 🔲 + apertura bajo PM M15 🔲",
     });
   }
 

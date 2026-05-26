@@ -355,6 +355,40 @@
           "indicators": ["Bollinger Bands"]
         }
       ]
+    },
+    {
+      "id": "STRAT-12",
+      "name": "Doble Green — Cambio de Tendencia 15m",
+      "status": "operative",
+      "position": "CALL/PUT",
+      "primary_timeframe": "M15",
+      "_notes": "La estrategia más usada diariamente. Solo se presenta en la apertura de mercado (9:30 ET). CRÍTICO: el precio debe estar DENTRO de Bollinger M15 al abrir — NO fuera de banda. Si abre fuera de banda → STRAT-04/05, no esta.",
+      "rules": [
+        {
+          "type": "pre_condition",
+          "timeframe": "D1/H1",
+          "condition": "Tendencia previa definida en dirección contraria: bajista en D1/H1 para CALL, alcista en D1/H1 para PUT",
+          "indicators": ["Bollinger Bands", "MA 20", "MA 40"]
+        },
+        {
+          "type": "pre_condition",
+          "timeframe": "M15",
+          "condition": "Apertura DENTRO de las Bollinger Bands M15 — precio entre banda inferior y superior, no afuera",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "type": "trigger",
+          "timeframe": "M15",
+          "condition": "Ruptura de línea de tendencia en M15: trendline bajista para CALL / alcista para PUT",
+          "indicators": ["Trendline"]
+        },
+        {
+          "type": "trigger",
+          "timeframe": "M15",
+          "condition": "Ruptura del Punto Medio (PM) de Bollinger M15 con volatilidad de apertura (salto sobre el middle para CALL / bajo el middle para PUT)",
+          "indicators": ["Bollinger Bands"]
+        }
+      ]
     }
   ],
 
@@ -419,5 +453,5 @@
     ]
   },
 
-  "notes": "Options strategy — CALL/PUT directional only. 9 operative strategies based on Bollinger Bands 20-2-0 (50% weight) + SMAs 20/40/100/200 (30% weight) across D1/H1/M15. Primary trading window 09:30–11:30 ET. STRAT-06 and STRAT-07 excluded (require TC2000 Worden Stochastics)."
+  "notes": "Options strategy — CALL/PUT directional only. 10 operative strategies based on Bollinger Bands 20-2-0 (50% weight) + SMAs 20/40/100/200 (30% weight) across D1/H1/M15. Primary trading window 09:30–11:30 ET. STRAT-06 and STRAT-07 excluded (require TC2000 Worden Stochastics). STRAT-12 'Doble Green' is the most-used daily strategy — fires at open, price must be INSIDE bands M15. STRAT-08/09 superseded by STRAT-12."
 }
