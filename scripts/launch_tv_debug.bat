@@ -44,6 +44,13 @@ set /a TRIES=0
 :cdp_ready
 echo.
 echo  CDP listo en http://localhost:9222
+
+echo [5/5] Iniciando schwab-analyzer (puerto 9224)...
+start "Schwab Analyzer" /min cmd /k "cd /d C:\Users\juant\tradingview-mcp-jackson && npm run schwab"
+timeout /t 2 /nobreak >nul
+powershell -NoProfile -Command "try { Invoke-RestMethod http://localhost:9224/ping -ErrorAction Stop | Out-Null; Write-Host '  Schwab Analyzer OK en http://localhost:9224' } catch { Write-Host '  Schwab Analyzer iniciando...' }"
+
+echo.
 echo  Abre Claude Code en C:\Users\juant\tradingview-mcp-jackson y ejecuta tv_health_check
 echo.
 pause
@@ -52,6 +59,10 @@ exit /b 0
 :cdp_timeout
 echo.
 echo  ADVERTENCIA: CDP no responde tras 60s. TradingView puede seguir cargando.
+
+echo [5/5] Iniciando schwab-analyzer de todas formas (puerto 9224)...
+start "Schwab Analyzer" /min cmd /k "cd /d C:\Users\juant\tradingview-mcp-jackson && npm run schwab"
+
 echo  Espera un minuto y ejecuta tv_health_check en Claude Code.
 echo.
 pause

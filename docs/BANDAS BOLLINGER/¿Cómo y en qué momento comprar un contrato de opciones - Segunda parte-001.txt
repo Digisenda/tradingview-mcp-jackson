@@ -1,0 +1,165 @@
+[criterio] No lo es por qué porque comprar más tiempo no necesariamente representa o significa que vaya a ocurrir y ahora la razón y cada vez que hay que entender compra más tiempo.
+
+[strike] Mi nombre es jorge usted siempre dice que debemos comprar un strike de un rango óptimo de un activo mi pregunta son dos. Una de arriba de la otra siempre va a haber un solo strike que esté en el rango óptimo y que tenga la diferencia menos de 10% entre el pit y el as eso siempre va a ser y cuando no sea.
+
+El precio de apple es 150 y creo que va a subir. Voy a comprar un call cuál es el rango de apple cuál es el rango de apple de 40 a 90 cuál es el rango de apple a 90 dólares tengo el estrey 160 y tengo el estrey 161 el 165 y el 159 me cuesta a 90 los 3 están en rango.
+
+Señor te ha enviado todo el dinero muchas gracias a la hora de elegir un contrato en rango. Voy a elegir la parte baja del rango a la hora de elegir un contrato en rango si es lunes o martes. Jueves y viernes la parte alta del rango qué significa lo podemos ver aquí en preciso ejemplo el spot price para la parte alta del rango si hoy fuera lunes o el lunes y me encuentro que voy a buscar un call aplicando para el put o el lunes y me encuentro estas tres opciones cuál es la elegiría qué producto compro por qué es que esta es la parte baja del rango el lunes o el martes y me encuentro que esta cuesta 48 cuál el lijo qué producto compro hoy es jueves.
+
+Pero ni voy a ganarlo mismo y estoy invertiendo mucho más y el activo sube de valor en costa de valorizar va a valorizar toda la cadena de opciones por completo.
+
+[criterio] Importante si yo compro un contrato de opciones, digamos, el rango es 40 y lo compro en 20 perdad qué ocurre cuando tu compras un contrato.
+
+Tú vas a comprar sobre la base de que antes de hacer todo esto. Lo primero que tú vas a hacer es ser experto en movimiento tú no vas a comprar ni un call. Tú vas a invertir en activos y vas a invertir en opciones entienden en esa parte. Todo esto es la parte de las opciones en los activos.
+
+[criterio] Tú vas a poder validar con resultados y te vas a hacer todo el sentido del mundo por eso le decía.
+
+Tenía entendido que había que comprar de extrais masacanos para que el teta no se comiera el profi y resulta ser que era todo lo contrario es resulta.
+
+[expiracion] Hay algunos productos que se despitan diariamente en el convento alcho y semana nos pasó con lo de la Fed cómo se merezgaría si pasa el rango aplica exactamente igual la fecha de expiración. Tú siempre vas a comprarla que se espira primero vamos a tomar una nota de esto porque vamos a entrar en fecha de expiración.
+
+La continuación a la hora de comprar. Pero es con el horario a la hora de comprar.
+
+[criterio] Debo comprar la fecha que se espira primero por qué es la que más se valoriza con la excepción.
+
+A la hora de comprar.
+
+[criterio] Siempre debo comprar la fecha que se espira primero.
+
+[expiracion] De que me encuentre próximo a la fecha de expiración. En ese caso comprarla siguiente fecha de expiración. Con la excepción de que me encuentre próximo a la fecha de expiración. En ese caso comprarla siguiente fecha de expiración entendieron eso vamos a poner el ejemplo. En ese caso comprarla siguiente fecha de expiración voy desde el principio para que se quedó otra.
+
+Voy a tomar nota a la hora de comprar.
+
+[expiracion] De que próximo a la fecha de expiración. En ese caso comprarla siguiente fecha de expiración vienes que yo digo la siguiente y es precisamente por lo que le diciendo.
+
+[riesgo] Poderosa y esencial para sacar beneficio donde otros no buscan.
+
+De los cuales existen contratos opciones. Digamos que voy a comprar con contratos opciones de apple. Identifico movimiento al asistan a las 10 de la mañana o a las 9 32.
+
+[expiracion] Qué fecha de expiración voy a comprar qué viernes viernes.
+
+A buscar un contrato un col. Tienes toda la confirmación de que el activo va a subir. Ya qué vas a comprar un col.
+
+[expiracion] Cuando vas a buscar la fecha de expiración.
+
+Ahora vas a entender por qué cuando tú vas a comprar el contrato de hoy.
+
+[expiracion] Porque la fecha de expiración es.
+
+[tecnico] Al final de una tendencia tu contrato. Como cambió la tendencia. Ya se fue en contra de la tendencia entienden.
+
+Si estoy comprando uno de productos que se espiran todos los días si yo voy a comprar a espey white. Que fecha voy a comprar. Que fecha voy a comprar en mate no voy a comprar en miércoles. No voy a comprar el martes. Es porque tú no vas a comprar nada si primero no identificaste con un movimiento.
+
+Si el movimiento que se da es de 2.
+
+[expiracion] Si yo compro un mes de fecha de expiración o con 15 días. Yo me encuentro en la mujer de en rango con una fecha de expiración de un mes es 210 y se da un fuerte movimiento.
+
+Tomar el plan de 35% entonces llegó el momento de comprar apple y tú comprastes hoy viernes. Tú comprastes básicamente estraí y se da movimiento y te saca como el 35.
+
+[tecnico] A lo mejor ahí se viró la tendencia.
+
+Se fue una otra dirección y tú te quedaste atrapado en un contrato que si hubiese comprado la fecha correcta y le estará correcto. Tu hubiese dejado la rentabilidad solo por comprar más tiempo pensando que era más seguro terminarte no teniendo ni rentabilidad y a final de la semana. Apagamos la luz y no se faten bienvenidos a tutorial de compraventa de contratos de opciones en thinkorswim tanto en android como en iphone.
+
+Aunque prácticamente los pasos son lo mismo hay pocas diferencias que vamos a mostrar a continuación cuando aperturas una cuenta de paper money en thinkorswim te va a aparecer esta pantalla inicialmente vas a tener un saldo de 200 mil dólares para poder practicar cuando ves ambas cuentas vas a tener una cuenta aera y una cuenta margin cada una con 100 mil dólares una vez en tu pantalla de margin vas a poder hacer tus ejercicios de simulación de compraventa para poder comprar un contrato de opciones en la parte superior derecha vas a ver una lupita.
+
+Pero lo que nosotros queremos comprar son opciones para hacer la configuración correcta en el recuadro central donde aparece spread. Strikes y exchange regularmente en iphone en single y en android custom ahora en la parte de los strikes vamos a dar clic y vamos a seleccionar 50 strikes esto nos va a permitir tener la visibilidad de más strikes para ver cuál en el rango óptimo que queremos comprar ahora vamos a tener en la parte central del lado derecho los put.
+
+[strike] Del lado izquierdo los call también vamos a seleccionar la fecha de exploración en la que queremos que se vendan nuestros contratos siempre va a ser la fecha más próxima de exploración regularmente para la mayoría de las compañías va a ser los viernes de la semana en curso en caso vamos a seleccionar el 31 de octubre del 2025 ahora sí vamos a ir a la parte central de nuestra cadena de opciones en donde la línea punteada la parte sombreada de nuestra cadena de opciones es in the money y la parte que no sombreada o es obscura va a ser out of the money y regularmente en esa parte vamos a encontrar nuestros contratos de opciones en el rango óptimo adecuado en el caso de nvidia vamos a comprar contratos call así que vamos a la parte izquierda y a seleccionar el strike que estén rango óptimo de precio el rango óptimo de nvidia es de entre 55 y 175 por lo cual el strike que corresponde sería el strike 205 y vamos a dar clic en la columna ask en el costo que tiene en momento para poder realizar la compra tengo que verificar que mi botón siempre esté en verde y va si lo veo en rojo.
+
+Lo que estaría pagando por 20 contratos ahora sí voy a enviar review y me va a enviar a esta siguiente pantalla con un recuadro verde en el cual me da los datos de mi orden ahí dice buy que es comprar 20 contratos de nvidia con una fecha de exploración al 31 de octubre del 2025 el strikeprice 205 call que estoy comprando en market si todo es correcto voy a enviar mi orden paperpray para poder verificar los voy a ir a mi pantalla principal o overview aquí me aparece ya la cantidad que tengo invertida en contratos.
+
+[riesgo] En el recuadro se va a ver en verde si tengo ganancia en rojos y estoy teniendo pérdida y en la parte inferior lo que me pagarían si lluviendo esos contratos en momento el netliquid es lo que tengo en mi cuenta aun que esté invertido en momento el option by in power es la cantidad que tengo para invertir en momento descontando lo que ya tengo invertido en el círculo verde me aparece un uno que es la orden que tengo ya en momento tengo una orden que es la orden que ya se ejecutó y en cancelado 0 ahora para poder ver las posiciones voy a ir a donde dice positions y ahí ya me aparece mi posición de mis contratos de opciones de nvidia voy a dar clic sobre el chíker de la compañía en esta pantalla voy a ver cómo me despliega menú en el cual estoy observando que tengo 20 contratos de nvidia y mark mark es el precio en el que se encuentran en momento mis contratos después tengo plofend que es lo que he ganado operado desde que abri la posición después pld que es lo que he ganado operado durante día el tright prise es el precio en el que yo compré mis contratos ahora para cerrar contratos voy a dar clic en el cuadrito que al lado de donde dice la cantidad de contratos y ahora voy a dar clic en el cuadrito que al lado de donde dice la cantidad de contratos y me va a arrojar estas dos ventanas voy a dar clic en el botón closelect en mi tright prise puedo ver que compré contratos en 182 dólares ahora sí para cerrar esta posición voy a ir a closelect y me va a despliegar esta pantalla para vender también de boverificar que siempre me aparezca mi cuadro en el botón closelect para vender también de boverificar que siempre me aparezca mi cuadro en cero si aparece vay lo que estaría haciendo es comprar más contratos de la misma posición que ya tengo y generando un refuerzo ahora lo que yo quiero hacer es poner mi venta de contratos para ello siempre voy a vender en el límite que le voy a poner a contratos en caso si mis contratos costaron 182 dólares lo voy a multiplicar por 1 35 en el caso de que mi plan sea el 35% si mi plan fuera del 10% lo multiplicaría por 1 a ese resultado le voy a sumar 2 dólares para poder pagar de ahí las comisiones que me cobre el broker y mi porcentaje me salga intacto el precio de venta sería de 247 dólares y lo voy a colocar aquí ese sería el límite que tendrían que alcanzar mis contratos para tener un 35% de rentabilidad voy a seleccionar de ahí porque lo vamos a cambiar a good on to you canse esto quiere decir que yo tengo hasta mi fecha de exploración para que se pueda cumplir mi pronóstico ahora me aparece que voy a vender 20 contratos y me pagarían por ellos 4 voy a enviar esta orden.
+
+[expiracion] Review y me aparece el recuadro ahora en rojo cuadro informativo que dice que voy a vender 20 contratos de nvidia con fecha de vencimiento del 31 de octubre el strike 205 call cuando lleguen a un límite de 240 good on to you canse tengo todo ese tiempo para que se puedan ejecutar ahí ya se ha enviado la orden para poder verla voy a ir nuevamente a mi página principal overview y ahí me aparece working esta orden working es porque aún no sea ejecutado las ordenes file ya están completamente cerradas.
+
+Yo puedo modificarla para bajar el precio o incluso poder comprar más contratos en caso lo que voy a realizar ahora es una venta manual voy a darle clic en límite para cambiarlo a market y gtc para cambiarlo a day lo que quiero en momento es vender mis contratos en el precio que se encuentren ahora y para ello se venden manual market deyo ahora regreso a mi overview y voy a ver que ya se han ejecutado las ordenes me aparecen dos ordenes file.
+
+Habría identificado un movimiento y no saber comprar como tampoco te sirve nada. Tú vas a poder comprar y vender con el mercado en vivo en tu cuenta de paper evidentemente. Lo en vivo y tú lo vas a ir haciendo vamos a comprar un call. Donde decidió es comprar y vender. Puedes entrar a todas las que quieras cuando tú quieras clases de preguntas y respuestas las tienes incluida de por vida.
+
+Tú no vas a entrar ahí a buscar nada y no vas a entrar. Porque tú puedes saber que aquí mucha gente que estaba en compar a y vender y que seguramente llevan tiempo invertiendo ya me he dado cuenta que hay persona ni sabía en lo verrando. Con último y otros que ni sabía en la fecha de expresión y si en barcos saben compar a y vender lo más.
+
+Que conozcas lo que el sí te conviene y lo que no lo que es ponderante a la hora de tomar una decisión de comparar un call o un put. Pongo el imagen inferchito que estaba ahí de la cadena opciones hay un detalle muy.
+
+[criterio] Importante donde las personas se equivocan una de las recomendaciones que yo te voy a dar para que sea sosteniblemente reentable en opciones es que solamente lijas tres empresas y tú me dirás.
+
+Todos los días las empresas se mueven o hacia arriba o hacia abajo y con las opciones. Ahora les pregunto ustedes de los que ya invertí en opciones que como mínimo a la hora de invertir lo hacían con 5 o 7 empresas o que miran más varios. En tantas cosas en algún momento cuando yo empezaba las 4 de la mañana en el mercado.
+
+Analizar en el mercado estaba mirando entre 100 y 300 de empresas por la mañana. Cuando abría en el mercado las 9 y 30. A tu computadora a mi llego y en la mañana tomar tu clase y hacer 4 375 dólares en 27 minutos con una corrección del mercado cuando me regresé.
+
+[tecnico] Tan tranquila en el equipo de soporte. Hoy se conoce como los craques de soporte a muchos que le van a dar clases.
+
+Sino puedan sostenerlemente la entrada se le hacen prueba donde no sean sostenerlemente la entrada.
+
+[riesgo] Como beneficio por vida sábado de los analíticos.
+
+[tecnico] Porque no tenía yo ese patrón mi patrón era gastar. Una dirección de más de un 10% porque lo estarías comprando mal y te puedes salir muy caro toda la empresa tiene un patrón repetitivo que te muestra la volatilidad.
+
+A dónde quiero llegar imaginemos de nuevo que el stripries que voy a comprar. Por qué todos valen 50 porque cuando tú estás comprando un contrato de opciones. Dentro del contrato opciones. Cuando tú compras un contrato opciones. El contrato que esté en rango del spot praise si tú tienes un montón de empresa. El miércoles te quedan 6 y así entonces tú vas a venir a comprar cualquier cosa y después.
+
+[criterio] Importante porque si hoy es lunes y el contrato que mí me cuesta 50 dólares que siempre ha estado 10 dólares de distancia.
+
+Porque evidentemente la volatilidad super activada en los contratos y en los precios entonces en ese caso voy a ir a buscar de las otras dos empresas que me se me memoria. Pero no por eso voy a parar de operar voy a utilizar una de mis otras dos empresas y si coincidentemente las dos están en erning y me voy al etf que nunca tiene erning y que directamente todos los días me lo voy a encontrar en un rango normal ya es la razón por la que entre varias cosas más se recomienda entre las empresas es un ejercicio que tú vas a hacer y va a formar parte de tu checklist si fuera mi hijo de día tienes.
+
+[criterio] Ahí no debes entrar porque hay algo que mal habían hecho su banda de ustedes entonces.
+
+[eventos] No en temporada de earnings.
+
+[criterio] Lo vuelves a validar la siguiente semana.
+
+Tú vas a comprar un call o un put. Porque tú puedes haciendo ejercicio tú puedes calculando el rango optimo y sabiéndote lo siguiendo el esquema que te compartía anteriormente cuando vas a buscar un contrato. Gracias que nos introdujeron a mercado. Porque esto no pasa paso a paso y yo voy a comprar.
+
+[tecnico] Te encuentras una tendencia lateral o la empresa prácticamente imprescindible movimiento al menos de las que tenemos recomendado de las que están en ese listado.
+
+Cayer en una fase de mercado de lateralidad y no se moviendo y no te conviene estar ahí. Vas a tener algunas de las otras que sí se va a estar moviendo y si no siempre tienes la opción de cambiar a la que tú quieras.
+
+[riesgo] Pongo en el stop apple.
+
+Por ejemplo, uno de los estudiantes que, después lo pongo si quieres, ese pónganon salió todavía, por salir. Ese contrato es el viernes correcto. Porque comprar y vender es un acto que realiza tú lo que tú estás elegiendo a comprar tu producto es una fecha de inspiración esa fecha de inspiración te va a decir exactamente cuánto vas a pasar por el producto la fecha de inspiración que se espira primero se valoriza más rápido que el que se espira después y en caso.
+
+Cuando ustedes compran un contrato de opciones tanto por comprarlo como por venderlo. Trey te cobra 50 centavas por contrato. Charles suave de cobras 65 qué significa que si yo estoy comprando un contrato en it s ray. Ese contrato me va a costar. En total yo estoy pagando un dólar de comisión por la compra y la venta y yo compré mi contrato y me costó 50 dólares qué yo voy a hacer cuéntame con el calculadora por 1 y a ese número.
+
+[criterio] Tú lo único que tienes que hacer es si tú identificas correctamente el movimiento hay que en mercado hacer su trabajo y vas a ver que muchas veces les va a pasar.
+
+Cómo es que sobrepasas ese plan de 35% cómo es que se valoriza más del 35% pregunta valiosísima yo compré un contrato que me costó 100 dólares qué fue lo que me costó 100 dólares mi contrato. El producto me compré cuando hago la compra y voy a portar folio y veo lo que padez fueron 100 dólares vamos a poner que compré un call.
+
+Un pro un call más 2 dólares de comisiones. Que deben saber de memoria el mercado no se detiene ni se paraliza para que te compras ni tampoco para que vendas el mercado abre a las 9 o 30 de la mañana. Yo soy en mercado para para que tú compre entonces. En lo que tú le das seleccionar y vas a comprar y a lo mejor te mira pagando 58 ya.
+
+Pero si estaban en 50, que a europa de mercado no se detiene para que tú compres por eso es.
+
+[criterio] Importante que van a aprender a hacer el proceso rápido después, cuando yo compré en 50, como viendo un fuerte movimiento, o yo compré en 100.
+
+Es movimiento siguió y cuando yo voy a vender lo que me había costado 100. Que yo quiero vender. 160 qué es lo que yo compré en 100 dólares el estraí price qué es lo que yo voy a vender para cuando llegue a 117. Que es lo que yo voy a vender los 120 y si cuando yo voy a poner la venta limit.
+
+No me lo va a vender en ese momento en 144. En 117 me lo van a vender en lo que costando en el momento. Me saca te da mucho más rentabilidad cuando tú lo vas a vender. Yo te voy a vender lo que en ese momento o. Yo compré mi contrabot y me costó 100 dólares qué fue lo que me costó 100 dólares el estraí qué es lo que yo voy a vender para cuando llegue a 117.
+
+Es la venta el producto mi producto por el que yo pague 100 dólares es el estraí mi producto al cual yo quiero vender a 117. Ahora manese costando 320 y en ese caso se vende ahí en 320 qué cosa es lo que cuesta 320 los cento centa no te lo pueden vender en esto porque lo que cuesta es esto y te lo tienen que ejecutar por eso.
+
+En 99% de las veces te lo van a vender lo que manese costando cuando no pases por un error de banco. No va a comprar la fecha en mi modía o a comprar el siguiente día o sea. Te lo va a vender lo que en ese momento y lo mismo va a ocurrir si no serán ese día y se da el siguiente día con un salto te puede dejar un 100.
+
+Dar salto y amanese costado 30 a la que entiendas lo que es el límite y en lo que tú vas a vender para cuando lo vende. Para venir un poquito más como entrar en context y poderar. Yo entendí que le trae que debíamos comprar. Tú lo vas a poder comprobar cuando vas a ir al ejercicio del rango timo de precio te vas a cuenta que en tu mismo movimiento del activo.
+
+[criterio] Fíjate que no debes comprar el contato que en el precio fijo entonces.
+
+[strike] Estoy encontrando tres extraques que están dentro del rango y estoy en un lunes que debería ir al strike para hacer un poquito más.
+
+Veo que todo tiene el mismo precio y nos trae van de 160. Todos tienen el mismo precio si me voy a explicar el producto que tú vas a comprar. Va valiendo menos el contrato mientras menos tiempo para llegar al inspiración. Va a le menos el contrato. Que es el rango que yo tengo que comprar el lunes me quedaba a 10 horas.
+
+Queda más cerca el rango porque si yo fuera a comprar el de 360. Me va a costar de 5 dólares por qué porque como tan lejos y falta tampoco para que se espíre la probabilidad de que ese movimiento se dé. Es nulla y por eso vale el tan barato a menor probabilidad de que ocurre movimiento.
+
+Que se deriva el activo lo que más tu paga cuando compras con contato opción es tiempo vamos a zoom. Mejor es una computadora el efecto que tengo una de las tiempos sobre el concepto de las opciones entiendo que un bendidor. Un bendidor de opciones ganas por la prima la prima es el costo que tú paga por el contrato exactamente el costo dónde va a cobrar la prima o si yo me contrate y ya no me cobrar la prima cuándo cuándo te paga la prima cuando tú compras el contrato.
+
+Tú estás pagando la prima si ese contrato se espirace y tú no haces nada. Pero durante el periodo de vida de contrato. Tú tienes control sobre tu inversión cuando tú vende tu contrato. Ya recupera mi prima malos 37 ganancias o sea. Hermano ahora viene algo que quiero compartir con ustedes muy buenas con el ejemplo que vos daba del contrato de que compravas a 100 dólares y ponías tu límite orden a 137 a cuando la orden llegó.
+
+Vale compró un contrato en 100 dólares esto que voy a decir ahora. Mi contrato se quedó costando 124 ya llegó a ser en 37 entonces.
+
+[strike] El strike al siguiente día.
+
+Amaneció costando 320 tan pronto como a pintura en mercado. Lo que costando es lo supera me lo va a vender en lo que esté costando en la apertura entendieron te vas a sacar a 137. Compré un put aquí va a bajar a 4d. El contrato que compré en 79 dólares. Prácticamente lo tuvo que vender en 5 para recuperar algo y esa parte es la que no entiendo.
+
+Lo que dice fue una prueba cuándo tú pagaste por tu contrato 79 dólares. Cuando tú compaste tu contrato en 79 dólares. Nunca se te va a valorizar el contrato vale.
+
+[strike] Cómo es eso seguir se cambia la duda a mí era ahorita cuando mencionaron el strike en 195 dólares.
+
+Eso es para un call o para un boot. Se estaría comprando un call. Tú vas a comprar en aquella barrera. Tú vas a comprar el lado acá. Como para puto la única razón por la que tú decidí ir a ocupar un puto un call es porque el movimiento que identificaste va a ir en una dirección o en la otra yo sé que si el movimiento que estoy identificando viene hacia abajo que voy a comprar un puto un puto.
+
+No lo están tú en el 99% de las veces te vas a contar tu contrato que en rango en a los demonios. Porque muchos años tratando de entrar en pienso. No se escucha el manejar mercado de capitales es una fuente. Eso de nuevo no hay dinero que los voy a comprar entonces. La pregunta sería por las costumbres de un obanón en el mercado cuando intervienes sobre las tres o sea.
