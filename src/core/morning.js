@@ -343,6 +343,8 @@ export async function runBrief({ rules_path } = {}) {
       "PASO 6 — Bid/Ask: recordar verificar spread antes de entrar.",
       "PASO 7 — Premarket: usar quote.last para precio. Estimar gap up/down/flat.",
       "ESTRATEGIAS: Reportar strategy_candidates con confidence='conditions_met' primero, luego 'setup_forming', luego 'watch'.",
+      "STRAT-12/13 CT15: si aparece en candidates, advertir que trigger y confirmaciones son SOLO verificables al abrir (9:30 ET) — en vivo: gap up/down rompe PM+trendline M15 SIMULTÁNEAMENTE + BB abre. Sin gap = estrategia cancelada. Si precio abre expuesto (fuera de banda) → pasar a STRAT-04/05, no CT15.",
+      "CT15 VENTANAS de entrada (orden de potencia): V1=1ª vela M15 BB abre inmediatamente (más potente) · V2=Double Green 2ª vela cierra sobre cierre anterior · V3=BB abre ANTES de llegar al disipador. Entrar en la primera ventana que se confirme.",
       "OUTPUT: Bloque estructurado por ticker + tabla resumen con bias global y estrategias prioritarias al final.",
     ].join(" "),
   };
