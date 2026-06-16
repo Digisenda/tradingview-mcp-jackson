@@ -134,6 +134,7 @@ Pesos del análisis: **BB 50% | MAs 30% | Fundamental 20%** (este último es man
 |---------|------|----------|
 | "morning brief" | **Rápido** | `morning_brief` → bias D1/H1/M15 por ticker + estrategias candidatas. ~2 minutos. |
 | "checklist" / "ejecuta checklist premarket" / "analiza apertura" / "análisis premarket" / "prepara el análisis" | **Completo** | `morning_brief` → análisis 7 pasos → dibujar líneas → screenshots → estrategias → guardar reporte. ~15-20 minutos. |
+| "movimiento en bloque" / "analiza el bloque" / "identifica el rezagado" | **Bloque** | Workflow Movimientos en Bloque → comparar distancia al nivel objetivo por ticker → dibujar MA objetivo → identificar líder y rezagado. Ver sección "Movimientos en Bloque". |
 
 ### Flujo completo (modo Checklist)
 
@@ -450,6 +451,78 @@ Si dice "no operé" o no responde → continuar sin registrar.
 - Strike: prima dentro del rango óptimo por ticker (ver rules.json → asset_config)
 - Expiración: más cercana. Corte viernes 11:00 AM ET → siguiente semana si ya pasó
 - Exit: +12% profit GTC / -25% stop loss GTC (bracket inmediato al entrar)
+
+## Movimientos en Bloque (#18)
+
+Concepto: múltiples activos de un mismo grupo (bloque) se mueven hacia el mismo nivel objetivo simultáneamente — como una carrera donde todos los carritos salen del mismo punto y van a la misma meta. El "líder" llega primero; los "rezagados" llegan después. La estrategia es entrar en el más rezagado cuando el líder ya está en el nivel: el rezagado tiene más recorrido por hacer y más potencial de ganancia.
+
+### Tipos de bloques
+
+| Tipo | Activos |
+|------|---------|
+| Índices (más potente) | IWM / TNA, SPY, DIA, QQQ |
+| Semiconductores | NVDA, MU, AMD, QCOM |
+| Tecnológicas / Consumo / Bancos / Tarjetas | identificar via mapa de calor Finviz |
+
+Identificar el bloque activo: ir al mapa de calor de Finviz → si el color se concentra en un sector/industria específica → bloque sectorial activo. Si el color domina TODO el mercado sin distinción → probable falso momentum amplio → no operar.
+
+### Cuándo ocurren
+
+- Final e inicio de ciclos y tendencias
+- Cuando todos los activos del bloque "vienen dibujando desde el mismo lugar" (mismo nivel de origen)
+- Los bloques de índices son los más potentes y fiables
+
+### Nivel objetivo (la "meta de la carrera")
+
+El nivel objetivo suele ser una MA clave: **MA40, MA100 o MA200**.
+- MA40: primer objetivo en correcciones/rebotes dentro de tendencia
+- MA100 / MA200: cambios de tendencia más profundos
+
+El líder ya llegó o está rompiendo ese nivel. Los rezagados todavía vienen de camino.
+
+### Workflow — Análisis de bloque
+
+**Trigger**: "analiza el bloque de [sector/índices]" / "identifica el rezagado" / "movimiento en bloque"
+
+```
+Para cada ticker del bloque identificado:
+  1. chart_set_symbol(ticker)
+  2. chart_set_timeframe("D")        ← análisis en D1 primero
+  3. data_get_study_values()         ← leer MA20, MA40, MA100, MA200
+  4. quote_get(ticker)               ← precio actual
+  5. Calcular distancia al nivel objetivo (MA40 por defecto):
+       distancia% = (MA40 - precio) / precio × 100
+       (negativo si el ticker ya superó el nivel → es líder)
+  6. draw_shape(horizontal_line, precio=MA40) → "MA40 [TICKER]" (amarillo)
+  7. Registrar: [ticker | precio | MA40 | distancia% | líder/rezagado]
+
+Al terminar todos:
+  - Ordenar de menor a mayor distancia%
+  - Líder = distancia% negativa (ya en nivel o por encima)
+  - Rezagado = mayor distancia% positiva → candidato de entrada
+```
+
+**Output**:
+```
+BLOQUE: [nombre]  |  NIVEL OBJETIVO: MA40 / MA100 / MA200
+─────────────────────────────────────────────────────────
+LÍDER    → [TICKER]  precio=XX  MA40=XX  ✅ ya en nivel / rompiendo
+[TICKER] → precio=XX  MA40=XX  distancia=3.2%
+REZAGADO → [TICKER]  precio=XX  MA40=XX  distancia=7.8%  ← ENTRADA
+─────────────────────────────────────────────────────────
+Setup: [CALL/PUT] en [REZAGADO] — esperar que [LÍDER] confirme continuidad en el nivel
+```
+
+### Reglas
+
+- El líder debe estar EN o ya PASANDO el nivel, nunca anticipar
+- Si ≥2 tickers del bloque ya llegaron al nivel → mayor probabilidad para el rezagado
+- Un bloque de índices (IWM+SPY+DIA+QQQ) pesa más que uno sectorial
+- NO operar si parece "falso momentum amplio" (todo el mercado igual, sin distinción sectorial)
+- La confirmación final sigue siendo técnica: BB + MAs del rezagado deben soportar la dirección
+- Este análisis es independiente del checklist premarket — se invoca ad-hoc cuando se detecta el patrón
+
+---
 
 ## Architecture
 
