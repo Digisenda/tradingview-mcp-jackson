@@ -40,7 +40,7 @@ Paste this into Claude Code and it will handle everything:
 
 ```
 Set up TradingView MCP Jackson for me. 
-Clone https://github.com/LewisWJackson/tradingview-mcp-jackson.git to ~/tradingview-mcp-jackson, run npm install, then add it to my MCP config at ~/.claude/.mcp.json (merge with any existing servers, don't overwrite them). 
+Clone https://github.com/Digisenda/tradingview-mcp-jackson.git to ~/tradingview-mcp-jackson, run npm install, then add it to my MCP config at ~/.claude/.mcp.json (merge with any existing servers, don't overwrite them). 
 The config block is: { "mcpServers": { "tradingview": { "command": "node", "args": ["/Users/YOUR_USERNAME/tradingview-mcp-jackson/src/server.js"] } } } — replace YOUR_USERNAME with my actual username.
 Then copy rules.example.json to rules.json and open it so I can fill in my trading rules.
 Finally restart and verify with tv_health_check.
@@ -64,7 +64,7 @@ Or follow the manual steps below.
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/LewisWJackson/tradingview-mcp-jackson.git ~/tradingview-mcp-jackson
+git clone https://github.com/Digisenda/tradingview-mcp-jackson.git ~/tradingview-mcp-jackson
 cd ~/tradingview-mcp-jackson
 npm install
 ```
