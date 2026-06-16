@@ -175,32 +175,44 @@ function screenStrategies(price, tfData) {
     });
   }
 
-  // STRAT-12 — Doble Green (Cambio de Tendencia 15m) — CALL y/o PUT
-  // CRÍTICO: precio debe estar DENTRO de bandas M15 (below_middle o at_middle para CALL;
-  //          above_middle o at_middle para PUT). "below_lower" / "above_upper" = FUERA de banda
-  //          → ese es territorio de STRAT-04/05, NO de Doble Green.
-  const insideBandsBullish = m15BBPos != null && ["below_middle", "at_middle"].includes(m15BBPos);
-  const insideBandsBearish = m15BBPos != null && ["above_middle", "at_middle"].includes(m15BBPos);
+  // STRAT-12/13 — Double Green CT15 (Cambio de Tendencia M15)
+  // Pre-condiciones verificables en premarket; trigger + confirmación solo al abrir (9:30 ET)
+  // STRAT-12 = CALL | STRAT-13 = PUT
+  const h1BearishCtx = h1BBPos === "below_middle" || h1MAOrd === "bajista" || h1MAOrd === "mixto_bajista";
+  const h1BullishCtx = h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista";
   const d1BearishCtx = d1BBPos === "below_middle" || d1MAOrd === "bajista" || d1MAOrd === "mixto_bajista";
   const d1BullishCtx = d1BBPos === "above_middle" || d1MAOrd === "alcista" || d1MAOrd === "mixto_alcista";
+  const m15InsideBands = m15BBPos != null && !["above_upper", "below_lower"].includes(m15BBPos);
+  const m15BelowMid   = m15BBPos === "below_middle";
+  const m15AboveMid   = m15BBPos === "above_middle";
 
-  if (insideBandsBullish) {
+  // STRAT-12 CALL: precio M15 bajo PM (o en PM) y dentro de BB — contexto D1/H1 bajista
+  if (m15InsideBands && !m15AboveMid) {
+    const confirmed = [];
+    const pending   = [];
+    if (m15BelowMid)   confirmed.push("M15 bajo PM dentro BB"); else pending.push("M15 bajo PM");
+    if (d1BearishCtx)  confirmed.push("D1 bajista");            else pending.push("D1 bajista");
+    if (h1BearishCtx)  confirmed.push("H1 bajista");            else pending.push("H1 bajista");
+    pending.push("trendline M15 trazada", "gap up rompe PM+trendline al abrir", "BB abre 1ª~3ª vela M15");
     candidates.push({
       id: "STRAT-12", position: "CALL",
-      confidence: d1BearishCtx ? "setup_forming" : "watch",
-      note: d1BearishCtx
-        ? "Doble Green CALL: D1 bajista ✅ + M15 dentro de banda bajo PM ✅ → falta: ruptura trendline M15 🔲 + apertura sobre BB Middle M15 con volatilidad 🔲"
-        : "Doble Green CALL: M15 dentro de banda bajo PM ✅ → falta: tendencia previa bajista D1/H1 🔲 + ruptura trendline M15 🔲 + apertura sobre PM M15 🔲",
+      confidence: (m15BelowMid && (d1BearishCtx || h1BearishCtx)) ? "setup_forming" : "watch",
+      note: `CT15 CALL: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
     });
   }
 
-  if (insideBandsBearish) {
+  // STRAT-13 PUT: precio M15 sobre PM (o en PM) y dentro de BB — contexto D1/H1 alcista
+  if (m15InsideBands && !m15BelowMid) {
+    const confirmed = [];
+    const pending   = [];
+    if (m15AboveMid)   confirmed.push("M15 sobre PM dentro BB"); else pending.push("M15 sobre PM");
+    if (d1BullishCtx)  confirmed.push("D1 alcista");             else pending.push("D1 alcista");
+    if (h1BullishCtx)  confirmed.push("H1 alcista");             else pending.push("H1 alcista");
+    pending.push("trendline M15 trazada", "gap down rompe PM+trendline al abrir", "BB abre 1ª~3ª vela M15");
     candidates.push({
-      id: "STRAT-12", position: "PUT",
-      confidence: d1BullishCtx ? "setup_forming" : "watch",
-      note: d1BullishCtx
-        ? "Doble Green PUT: D1 alcista ✅ + M15 dentro de banda sobre PM ✅ → falta: ruptura trendline M15 🔲 + apertura bajo BB Middle M15 con volatilidad 🔲"
-        : "Doble Green PUT: M15 dentro de banda sobre PM ✅ → falta: tendencia previa alcista D1/H1 🔲 + ruptura trendline M15 🔲 + apertura bajo PM M15 🔲",
+      id: "STRAT-13", position: "PUT",
+      confidence: (m15AboveMid && (d1BullishCtx || h1BullishCtx)) ? "setup_forming" : "watch",
+      note: `CT15 PUT: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
     });
   }
 
@@ -480,34 +492,63 @@ export function generateHtml(briefData, date) {
   // ── Condition chips builder ───────────────────────────────────────────────────
   function buildCondHtml(sym, cand) {
     const d1  = sym.timeframes?.D1  || {};
+    const h1  = sym.timeframes?.H1  || {};
     const m15 = sym.timeframes?.M15 || {};
     const pos = cand.position; // "CALL" | "PUT"
     const items = [];
 
-    // BB D1 direction
-    const d1Bull = ["above_middle", "above_upper"].includes(d1.bb_position);
-    const d1Bear = ["below_middle", "below_lower"].includes(d1.bb_position);
-    if (pos === "CALL" && d1Bull)      items.push({ ok: true,  label: "BB D1 alcista" });
-    else if (pos === "PUT" && d1Bear)  items.push({ ok: true,  label: "BB D1 bajista" });
-    else                               items.push({ ok: false, label: "BB D1 dirección" });
+    if (cand.id === "STRAT-12" || cand.id === "STRAT-13") {
+      // PC-003: precio dentro de BB M15 (no expuesto)
+      const m15Pos = m15.bb_position;
+      const m15Inside = m15Pos != null && !["above_upper", "below_lower"].includes(m15Pos);
+      items.push({ ok: m15Inside || null, label: "M15 dentro BB (no expuesto)" });
 
-    // MAs D1 alignment
-    const maAlc = ["alcista", "mixto_alcista"].includes(d1.ma_order);
-    const maBaj = ["bajista", "mixto_bajista"].includes(d1.ma_order);
-    if (pos === "CALL" && maAlc)       items.push({ ok: true,  label: "MAs D1 ↑" });
-    else if (pos === "PUT" && maBaj)   items.push({ ok: true,  label: "MAs D1 ↓" });
-    else                               items.push({ ok: false, label: "MAs D1 alineación" });
+      // PC-002: cuerpo último cierre bajo/sobre PM M15
+      if (pos === "CALL") {
+        items.push({ ok: m15Pos === "below_middle" || null, label: "M15 cierre bajo PM" });
+      } else {
+        items.push({ ok: m15Pos === "above_middle" || null, label: "M15 cierre sobre PM" });
+      }
 
-    // BB M15 compression
-    const m15w = m15.bb?.width;
-    if (m15w != null) {
-      if (m15w < 6) items.push({ ok: true,  label: `BB M15 comprimido (${m15w.toFixed(1)})` });
-      else          items.push({ ok: false, label: `BB M15 ancho (${m15w.toFixed(1)})` });
+      // PC-001/PC-005 proxy: contexto D1
+      const d1Bear = ["below_middle", "below_lower"].includes(d1.bb_position);
+      const d1Bull = ["above_middle", "above_upper"].includes(d1.bb_position);
+      if (pos === "CALL") items.push({ ok: d1Bear || null, label: "D1 bajista" });
+      else                items.push({ ok: d1Bull || null, label: "D1 alcista" });
+
+      // PC-001/PC-005 proxy: contexto H1
+      const h1Bear = ["below_middle", "below_lower"].includes(h1.bb_position);
+      const h1Bull = ["above_middle", "above_upper"].includes(h1.bb_position);
+      if (pos === "CALL") items.push({ ok: h1Bear || null, label: "H1 bajista" });
+      else                items.push({ ok: h1Bull || null, label: "H1 alcista" });
+
+      // TR-001 + CF-001/002/003: solo verificables al abrir — siempre pendiente
+      items.push({ ok: null, label: pos === "CALL" ? "Gap up rompe PM+trendline" : "Gap down rompe PM+trendline" });
+      items.push({ ok: null, label: "BB abre 1ª~3ª vela M15" });
+
+    } else {
+      // Chips genéricos para STRAT-01~11
+      const d1Bull = ["above_middle", "above_upper"].includes(d1.bb_position);
+      const d1Bear = ["below_middle", "below_lower"].includes(d1.bb_position);
+      if (pos === "CALL" && d1Bull)      items.push({ ok: true,  label: "BB D1 alcista" });
+      else if (pos === "PUT" && d1Bear)  items.push({ ok: true,  label: "BB D1 bajista" });
+      else                               items.push({ ok: false, label: "BB D1 dirección" });
+
+      const maAlc = ["alcista", "mixto_alcista"].includes(d1.ma_order);
+      const maBaj = ["bajista", "mixto_bajista"].includes(d1.ma_order);
+      if (pos === "CALL" && maAlc)       items.push({ ok: true,  label: "MAs D1 ↑" });
+      else if (pos === "PUT" && maBaj)   items.push({ ok: true,  label: "MAs D1 ↓" });
+      else                               items.push({ ok: false, label: "MAs D1 alineación" });
+
+      const m15w = m15.bb?.width;
+      if (m15w != null) {
+        if (m15w < 6) items.push({ ok: true,  label: `BB M15 comprimido (${m15w.toFixed(1)})` });
+        else          items.push({ ok: false, label: `BB M15 ancho (${m15w.toFixed(1)})` });
+      }
+
+      items.push({ ok: null, label: "Vol M15 sube al abrir" });
+      items.push({ ok: null, label: pos === "CALL" ? "PM virar al alza" : "PM virar a la baja" });
     }
-
-    // At-open pending (always)
-    items.push({ ok: null, label: "Vol M15 sube al abrir" });
-    items.push({ ok: null, label: pos === "CALL" ? "PM virar al alza" : "PM virar a la baja" });
 
     return items.map((item) => {
       let icon, cls;
@@ -673,6 +714,7 @@ export function generateHtml(briefData, date) {
             <option>STRAT-01</option><option>STRAT-02</option><option>STRAT-03</option>
             <option>STRAT-04</option><option>STRAT-05</option><option>STRAT-08</option>
             <option>STRAT-09</option><option>STRAT-10</option><option>STRAT-11</option>
+            <option>STRAT-12</option><option>STRAT-13</option>
           </select>
           <input type="hidden" id="t-signal-code" value="">
         </div>
