@@ -358,34 +358,146 @@
     },
     {
       "id": "STRAT-12",
-      "name": "Doble Green — Cambio de Tendencia 15m",
+      "name": "Double Green — Cambio de Tendencia M15 (CALL)",
       "status": "operative",
-      "position": "CALL/PUT",
+      "position": "CALL",
       "primary_timeframe": "M15",
-      "_notes": "La estrategia más usada diariamente. Solo se presenta en la apertura de mercado (9:30 ET). CRÍTICO: el precio debe estar DENTRO de Bollinger M15 al abrir — NO fuera de banda. Si abre fuera de banda → STRAT-04/05, no esta.",
+      "_notes": "Estrategia más usada diariamente. 3 ventanas de entrada: Ventana 1=1ª vela M15 (más potente), Ventana 2=Double Green 2ª vela, Ventana 3=BB abre antes del disipador. CRÍTICO: precio debe estar DENTRO de Bollinger M15 al abrir — si abre expuesto → STRAT-04/05.",
       "rules": [
         {
-          "type": "pre_condition",
-          "timeframe": "D1/H1",
-          "condition": "Tendencia previa definida en dirección contraria: bajista en D1/H1 para CALL, alcista en D1/H1 para PUT",
-          "indicators": ["Bollinger Bands", "MA 20", "MA 40"]
-        },
-        {
+          "canonical_id": "STRAT-12-PC-001",
           "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "Apertura DENTRO de las Bollinger Bands M15 — precio entre banda inferior y superior, no afuera",
+          "condition": "Tendencia bajista o lateral en M15 el día anterior (punto medio M15 bajista o lateral)",
+          "indicators": ["Bollinger Bands", "MA 20"]
+        },
+        {
+          "canonical_id": "STRAT-12-PC-002",
+          "type": "pre_condition",
+          "timeframe": "M15",
+          "condition": "CUERPO de la última vela M15 del día anterior cerró POR DEBAJO de punto medio (BB middle M15). La sombra puede estar por arriba, lo que cuenta es el cuerpo.",
           "indicators": ["Bollinger Bands"]
         },
         {
-          "type": "trigger",
+          "canonical_id": "STRAT-12-PC-003",
+          "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "Ruptura de línea de tendencia en M15: trendline bajista para CALL / alcista para PUT",
+          "condition": "Precio al cierre del día anterior dentro de Bollinger M15 (NO expuesto — no tocando ni superando disipador superior). Si abre expuesto al día siguiente, la estrategia se cancela.",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-12-PC-004",
+          "type": "pre_condition",
+          "timeframe": "M15",
+          "condition": "Línea de tendencia trazada bordeando POR ARRIBA la mayor cantidad de máximos posibles (tendencia bajista confirmada en M15)",
           "indicators": ["Trendline"]
         },
         {
+          "canonical_id": "STRAT-12-PC-005",
+          "type": "pre_condition",
+          "timeframe": "H1",
+          "condition": "Panorama completo verificado: no hay techos/pisos fuertes en H1 y D1 que frenen el movimiento esperado al alza. Bollinger y MAs en H1/D1 revisados.",
+          "indicators": ["Bollinger Bands", "MA 20", "MA 40", "MA 100", "MA 200"]
+        },
+        {
+          "canonical_id": "STRAT-12-TR-001",
           "type": "trigger",
           "timeframe": "M15",
-          "condition": "Ruptura del Punto Medio (PM) de Bollinger M15 con volatilidad de apertura (salto sobre el middle para CALL / bajo el middle para PUT)",
+          "condition": "Salto (gap up) al abrir el mercado (9:30 ET) que rompe SIMULTÁNEAMENTE la línea de tendencia Y el punto medio M15. Sin salto = estrategia cancelada.",
+          "indicators": ["Trendline", "Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-12-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "VENTANA 1 (más potente) — 1ª vela M15 (9:30–9:45 ET): precio abre DENTRO de Bollinger (no expuesto) + punto medio vira al alza + volatilidad (disipadores) se abre INMEDIATAMENTE al abrir el mercado.",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-12-CF-002",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "VENTANA 2 — Double Green (2ª vela M15, ~9:45 ET): precio sigue dentro de Bollinger + punto medio ya virado al alza + la volatilidad se abre en la 2ª vela + precio rompe precio de cierre del día anterior.",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-12-CF-003",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "VENTANA 3 — Saliendo de Bollinger con volatilidad (3ª vela M15 en adelante): precio dentro de BB + punto medio virado al alza + rompe precio de cierre + la volatilidad se abre ANTES de que el precio llegue al disipador. INVALIDACIÓN: si el precio ya está expuesto → NO entrar.",
+          "indicators": ["Bollinger Bands"]
+        }
+      ]
+    },
+    {
+      "id": "STRAT-13",
+      "name": "Double Green — Cambio de Tendencia M15 (PUT)",
+      "status": "operative",
+      "position": "PUT",
+      "primary_timeframe": "M15",
+      "_notes": "Espejo de STRAT-12 para dirección bajista. Mismas 3 ventanas de entrada. CRÍTICO: precio debe estar DENTRO de Bollinger M15 al abrir — si abre expuesto → STRAT-04/05.",
+      "rules": [
+        {
+          "canonical_id": "STRAT-13-PC-001",
+          "type": "pre_condition",
+          "timeframe": "M15",
+          "condition": "Tendencia alcista o lateral en M15 el día anterior (punto medio M15 alcista o lateral)",
+          "indicators": ["Bollinger Bands", "MA 20"]
+        },
+        {
+          "canonical_id": "STRAT-13-PC-002",
+          "type": "pre_condition",
+          "timeframe": "M15",
+          "condition": "CUERPO de la última vela M15 del día anterior cerró POR ARRIBA de punto medio (BB middle M15). La sombra puede estar por abajo, lo que cuenta es el cuerpo.",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-13-PC-003",
+          "type": "pre_condition",
+          "timeframe": "M15",
+          "condition": "Precio al cierre del día anterior dentro de Bollinger M15 (NO expuesto — no tocando ni superando disipador inferior). Si abre expuesto al día siguiente, la estrategia se cancela.",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-13-PC-004",
+          "type": "pre_condition",
+          "timeframe": "M15",
+          "condition": "Línea de tendencia trazada bordeando POR ABAJO la mayor cantidad de mínimos posibles (tendencia alcista confirmada en M15)",
+          "indicators": ["Trendline"]
+        },
+        {
+          "canonical_id": "STRAT-13-PC-005",
+          "type": "pre_condition",
+          "timeframe": "H1",
+          "condition": "Panorama completo verificado: no hay pisos/soportes fuertes en H1 y D1 que frenen el movimiento esperado a la baja. Bollinger y MAs en H1/D1 revisados.",
+          "indicators": ["Bollinger Bands", "MA 20", "MA 40", "MA 100", "MA 200"]
+        },
+        {
+          "canonical_id": "STRAT-13-TR-001",
+          "type": "trigger",
+          "timeframe": "M15",
+          "condition": "Salto (gap down) al abrir el mercado (9:30 ET) que rompe SIMULTÁNEAMENTE la línea de tendencia Y el punto medio M15 a la baja. Sin salto = estrategia cancelada.",
+          "indicators": ["Trendline", "Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-13-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "VENTANA 1 (más potente) — 1ª vela M15 (9:30–9:45 ET): precio abre DENTRO de Bollinger (no expuesto) + punto medio vira a la baja + volatilidad (disipadores) se abre INMEDIATAMENTE al abrir el mercado.",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-13-CF-002",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "VENTANA 2 — Double Green (2ª vela M15, ~9:45 ET): precio sigue dentro de Bollinger + punto medio ya virado a la baja + la volatilidad se abre en la 2ª vela + precio rompe precio de cierre del día anterior a la baja.",
+          "indicators": ["Bollinger Bands"]
+        },
+        {
+          "canonical_id": "STRAT-13-CF-003",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "VENTANA 3 — Saliendo de Bollinger con volatilidad (3ª vela M15 en adelante): precio dentro de BB + punto medio virado a la baja + rompe precio de cierre a la baja + la volatilidad se abre ANTES de que el precio llegue al disipador inferior. INVALIDACIÓN: si el precio ya está expuesto → NO entrar.",
           "indicators": ["Bollinger Bands"]
         }
       ]
@@ -453,5 +565,5 @@
     ]
   },
 
-  "notes": "Options strategy — CALL/PUT directional only. 10 operative strategies based on Bollinger Bands 20-2-0 (50% weight) + SMAs 20/40/100/200 (30% weight) across D1/H1/M15. Primary trading window 09:30–11:30 ET. STRAT-06 and STRAT-07 excluded (require TC2000 Worden Stochastics). STRAT-12 'Doble Green' is the most-used daily strategy — fires at open, price must be INSIDE bands M15. STRAT-08/09 superseded by STRAT-12."
+  "notes": "Options strategy — CALL/PUT directional only. 13 strategies (11 operative + STRAT-06/07 excluded). Based on Bollinger Bands 20-2-0 (50% weight) + SMAs 20/40/100/200 (30% weight) across D1/H1/M15. Primary trading window 09:30–11:30 ET. STRAT-06 and STRAT-07 excluded (require TC2000 Worden Stochastics). STRAT-12/13 'Double Green / CT15' is the most-used daily strategy — fires at open, price must be INSIDE bands M15, gap breaks trendline+midpoint simultaneously. 3 entry windows: V1=1st M15 candle (strongest), V2=Double Green 2nd candle, V3=BB opens before band. STRAT-08/09 superseded by STRAT-12/13."
 }
