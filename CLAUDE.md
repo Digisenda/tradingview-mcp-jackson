@@ -340,42 +340,62 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
 **Regla crítica de output:** Durante los pasos 1–4 Claude recolecta datos en silencio.
 NO generar texto de análisis por paso. Al terminar los 6 tickers → generar UN SOLO briefing consolidado.
 
+#### Modelo de scoring ponderado
+
+Calcular un score 0–100% por ticker/estrategia usando los pesos de la metodología:
+
+| Bucket | Peso | Cálculo |
+|---|---|---|
+| Condiciones BB | 50% | (BB_cumplidas + 0.5×BB_pendientes) / BB_total |
+| Condiciones MA | 30% | (MA_cumplidas + 0.5×MA_pendientes) / MA_total |
+| Otras (vol, timing, fundamental) | 20% | (otras_cumplidas + 0.5×otras_pendientes) / otras_total |
+| **Score final** | | BB_score×0.50 + MA_score×0.30 + Otras_score×0.20 |
+
+Leyenda de condiciones:
+- ✅ = cumplida (vale 1.0)
+- 🔲 = pendiente de apertura — M15, volumen, CT15 (vale 0.5)
+- ❌ = no cumplida (vale 0)
+
+**Umbrales de clasificación:**
+- 🟢 ≥75% → EJECUTAR AL ABRIR (expandido con checklist completo)
+- 🟡 40–74% → VIGILAR (expandido con checklist completo)
+- 🔴 <40% → una línea con razón principal
+
+**Veto FED/Earnings:** NO colapsa a 🔴 automático. Muestra el score técnico real más advertencia ⚠️ visible. El operador decide.
+
 **Formato del briefing (copiar exactamente esta estructura):**
 
 ```
 ━━━ PREMARKET YYYY-MM-DD | HH:MM AM ET ━━━━━━━━━━━━━━━━
-⚠️  FED: [OK (próximo DD/MM) / HOY → precaución]  |  [TICKER: EARNINGS DD/MM → no operar]
+FED: [OK (próx. DD/MM) / HOY ⚠️]  |  [TICKER ⚠️ EARNINGS DD/MM]
 
-🟢 EJECUTAR AL ABRIR
-─────────────────────────────────────────────────────────
-[TICKER]  [CALL/PUT]  [STRAT-XX]  |  Prima: $X.XX–X.XX  |  +XX% / -XX%
-          ✅ [condición confirmada]  ✅ [condición confirmada]  ✅ [condición confirmada]
+🟢 87% — IWM  PUT  [Nombre completo de estrategia]
+   ✅ [cond BB 1]     ✅ [cond BB 2]     🔲 [cond BB 3 al abrir]
+   ✅ [cond MA 1]     ✅ [cond MA 2]
+   Prima $X.XX–X.XX  |  -25% / +12%
 
-🟡 VIGILAR — falta confirmación
-─────────────────────────────────────────────────────────
-[TICKER]  [CALL/PUT]  [STRAT-XX]  |  Prima: $X.XX–X.XX  |  +XX% / -XX%
-          ✅ [condición confirmada]  ✅ [condición confirmada]
-          🔲 [qué falta ver al abrir]  🔲 [qué falta ver al abrir]
+🟡 62% — NVDA  CALL  [Nombre completo de estrategia]  ⚠️ EARNINGS DD/MM
+   ✅ [cond BB 1]     🔲 [cond BB 2]     ❌ [cond BB 3]
+   ✅ [cond MA 1]     🔲 [cond MA 2]
+   Prima $X.XX–X.XX  |  -25% / +12%
 
-🔴 NO OPERAR
-─────────────────────────────────────────────────────────
-[TICKER]  → [razón en una línea: Earnings / BB lateral / sin volatilidad / etc.]
+🔴 SPY  → [razón principal en una línea]
+🔴 QQQ  → [razón principal en una línea]
+🔴 AAPL → [razón principal en una línea]
+🔴 DIA  → [razón principal en una línea]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-**Reglas de clasificación:**
-- 🟢 EJECUTAR — todas las condiciones de la estrategia confirmadas en premarket
-- 🟡 VIGILAR  — al menos 1 condición clave falta (se confirma cuando abre el mercado)
-- 🔴 NO OPERAR — filtro activo (FED/Earnings) O BB lateral O sin volatilidad D+H
-
 **Reglas de contenido:**
-- Estrategia = título del bloque, no al final
-- ✅ = condición ya visible en el gráfico premarket
-- 🔲 = condición a confirmar cuando abre el mercado (M15 vol, PM virando, ruptura de nivel)
+- Nombre completo de la estrategia SIEMPRE (no solo número — la numeración puede cambiar)
+- Score % SIEMPRE visible en 🟢 y 🟡
+- Mostrar TODAS las condiciones de la estrategia, agrupadas: BB primero, MA después
+- ✅ / 🔲 / ❌ por cada condición — sin texto largo, máx 4 palabras por condición
+- FED y Earnings = SIEMPRE en el header
+- Veto activo = repetir ⚠️ en la línea del ticker además del header
 - Prima = rango óptimo según rules.json asset_config para ese ticker
-- Target/Stop = siempre visible. Usar +12% / -25% por defecto hasta que se configure por estrategia
-- FED y Earnings = SIEMPRE en el header — es el primer dato que se lee
-- Bid/Ask, Trendlines, valores exactos de MAs → van al dashboard HTML, NO al briefing de Claude
+- Target/Stop = siempre visible. Usar +12% / -25% por defecto
+- Bid/Ask, Trendlines, valores exactos de MAs → van al dashboard HTML, NO al briefing
 
 ### Paso final — Guardar reporte y líneas
 
