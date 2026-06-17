@@ -164,7 +164,7 @@ R. trades_get(10)             → retroalimentación: leer últimos trades antes
 - "análisis premarket"
 - "prepara el análisis"
 
-**Watchlist:** AAPL, NVDA, SPY, QQQ, IWM, DIA
+**Watchlist:** AAPL, NVDA, SPY, TSLA, QQQ (fuente de verdad: `rules.json` → `watchlist`)
 
 ### Indicadores del sistema (los únicos que se usan)
 - **Bollinger Bands 20-2-0** → peso 50% del análisis. Indicador primario.
@@ -178,7 +178,7 @@ R. trades_get(10)             → retroalimentación: leer últimos trades antes
 ### Secuencia por ticker
 
 ```
-Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
+Para cada ticker en [AAPL, NVDA, SPY, TSLA, QQQ]:
 
   PASO 0 — Setup
     chart_set_symbol(ticker)
@@ -338,7 +338,7 @@ Para cada ticker en [AAPL, NVDA, SPY, QQQ, IWM, DIA]:
 ### Output del checklist — Briefing de Operaciones
 
 **Regla crítica de output:** Durante los pasos 1–4 Claude recolecta datos en silencio.
-NO generar texto de análisis por paso. Al terminar los 6 tickers → generar UN SOLO briefing consolidado.
+NO generar texto de análisis por paso. Al terminar los 5 tickers → generar UN SOLO briefing consolidado.
 
 #### Modelo de scoring ponderado
 
@@ -369,7 +369,7 @@ Leyenda de condiciones:
 ━━━ PREMARKET YYYY-MM-DD | HH:MM AM ET ━━━━━━━━━━━━━━━━
 FED: [OK (próx. DD/MM) / HOY ⚠️]  |  [TICKER ⚠️ EARNINGS DD/MM]
 
-🟢 87% — IWM  PUT  [Nombre completo de estrategia]
+🟢 87% — TSLA  PUT  [Nombre completo de estrategia]
    ✅ [cond BB 1]     ✅ [cond BB 2]     🔲 [cond BB 3 al abrir]
    ✅ [cond MA 1]     ✅ [cond MA 2]
    Prima $X.XX–X.XX  |  -25% / +12%
@@ -378,11 +378,11 @@ FED: [OK (próx. DD/MM) / HOY ⚠️]  |  [TICKER ⚠️ EARNINGS DD/MM]
    ✅ [cond BB 1]     🔲 [cond BB 2]     ❌ [cond BB 3]
    ✅ [cond MA 1]     🔲 [cond MA 2]
    Prima $X.XX–X.XX  |  -25% / +12%
+   ⚠ Vigilar: línea BB Middle D1 ($182.40) — alerta manual si rompe hacia arriba
 
 🔴 SPY  → [razón principal en una línea]
 🔴 QQQ  → [razón principal en una línea]
 🔴 AAPL → [razón principal en una línea]
-🔴 DIA  → [razón principal en una línea]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -396,10 +396,51 @@ FED: [OK (próx. DD/MM) / HOY ⚠️]  |  [TICKER ⚠️ EARNINGS DD/MM]
 - Prima = rango óptimo según rules.json asset_config para ese ticker
 - Target/Stop = siempre visible. Usar +12% / -25% por defecto
 - Bid/Ask, Trendlines, valores exactos de MAs → van al dashboard HTML, NO al briefing
+- Solo tickers 🟡 llevan la línea "⚠ Vigilar:" (ver sección siguiente). Los 🟢 no la llevan —
+  el usuario ya está mirando el chart activamente para ejecutar al abrir.
+
+### Línea de vigilancia — alerta manual sobre nivel dibujado (Fase 5, cerrada 2026-06-17)
+
+**Por qué existe:** un ticker 🟡 tiene condiciones 🔲 pendientes de apertura. Si el usuario se
+aleja del chart, hoy no hay forma de que se entere cuando el precio rompe el nivel que
+decidiría la entrada. Esta sección resuelve eso usando el gesto nativo de alertas de
+TradingView — **no** las tools `alert_create`/`alert_delete` del MCP (ver razón abajo).
+
+**Para cada ticker 🟡**, elegir el nivel crítico con este orden determinístico (mismo peso que
+el scoring: BB 50% > MA 30% > otras):
+1. BB Middle D1, si se dibujó en el paso 1 (tiene tendencia, no LATERAL)
+2. BB Middle H1, si aplicara (normalmente no se dibuja — ver paso 3, pero úsalo si fue el único
+   nivel con tendencia clara)
+3. La MA (D1 o H1) más cercana al precio actual, de las que se dibujaron en los pasos 3/4
+4. La H-line (Máx/Mín H1) más cercana al precio actual, de las dibujadas en el paso 3
+
+**Si ningún nivel fue dibujado** para ese ticker (caso límite: BB LATERAL en D1 y H1, ninguna MA
+calificó, y por algún fallo tampoco se dibujaron H-lines), escribir explícitamente en el
+briefing: `⚠ Vigilar: sin nivel dibujado — vigilar manualmente, sin alerta posible`. Nunca omitir
+la línea en silencio — la ausencia debe ser visible, no implícita.
+
+**Dirección esperada** (informativa, para que el usuario elija bien en el diálogo nativo):
+CALL → cruce hacia arriba del nivel. PUT → cruce hacia abajo.
+
+**Formato de la línea en el briefing:**
+`⚠ Vigilar: línea [BB Middle D1 / MA40 D1 / Máx 1 H1 / etc.] ($precio) — alerta manual si rompe hacia [arriba/abajo]`
+
+**Acción del usuario** (no de Claude): clic derecho sobre esa línea en el chart → "Crear alerta
+sobre [línea horizontal]". Confirmado en vivo el 2026-06-17: el diálogo nativo de TradingView ya
+trae "Activación: Solo una vez" por defecto — no hace falta cambiar nada ahí.
+
+**Por qué no se usa `alert_create`/`alert_delete` del MCP:** TradingView Desktop no expone API
+interna para alertas (`_alertService is null`, confirmado en el commit `9274ff3` de este mismo
+repo). `alert_create` acepta un parámetro `condition` pero el código nunca lo conecta al
+dropdown real de la UI — solo rellena precio y mensaje. `alert_delete` no soporta borrado
+individual. Automatizar el diálogo completo vía DOM sería repetir, para alertas, el patrón que
+este proyecto ya evitó deliberadamente en estrategias/layouts/símbolos/pine scripts (todos
+migrados a API interna cuando existía). El gesto nativo de un clic ya resuelve esto sin ese
+riesgo.
 
 ### Paso final — Guardar reporte y líneas
 
-Al terminar el checklist completo de los 6 tickers, llamar en este orden:
+Al terminar el checklist completo de los 5 tickers, llamar en este orden:
 ```
 1. premarket_save(
      content="[reporte completo en markdown]",
