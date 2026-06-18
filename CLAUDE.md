@@ -164,7 +164,7 @@ R. trades_get(10)             → retroalimentación: leer últimos trades antes
 - "análisis premarket"
 - "prepara el análisis"
 
-**Watchlist:** AAPL, NVDA, SPY, TSLA, QQQ (fuente de verdad: `rules.json` → `watchlist`)
+**Watchlist:** NVDA, TSLA (fuente de verdad: `rules.json` → `watchlist`)
 
 ### Indicadores del sistema (los únicos que se usan)
 - **Bollinger Bands 20-2-0** → peso 50% del análisis. Indicador primario.
@@ -178,7 +178,7 @@ R. trades_get(10)             → retroalimentación: leer últimos trades antes
 ### Secuencia por ticker
 
 ```
-Para cada ticker en [AAPL, NVDA, SPY, TSLA, QQQ]:
+Para cada ticker en [NVDA, TSLA]:
 
   PASO 0 — Setup
     chart_set_symbol(ticker)

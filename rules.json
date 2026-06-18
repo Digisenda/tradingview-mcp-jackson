@@ -1,5 +1,5 @@
 {
-  "watchlist": ["AAPL", "NVDA", "SPY", "TSLA", "QQQ"],
+  "watchlist": ["NVDA", "TSLA"],
   "default_timeframe": "60",
 
   "fundamental_filters": {
@@ -12,7 +12,6 @@
       "2026-12-10"
     ],
     "earnings": {
-      "AAPL": "2026-07-28",
       "NVDA": "2026-08-27"
     }
   },
@@ -25,25 +24,10 @@
   },
 
   "asset_config": {
-    "AAPL": {
-      "premium_range_optimal": { "min": 45, "max": 95 },
-      "premium_range_limits":  { "min": 40, "max": 100 },
-      "contracts_at_midpoint": 23
-    },
     "NVDA": {
       "premium_range_optimal": { "min": 80, "max": 170 },
       "premium_range_limits":  { "min": 75, "max": 175 },
       "contracts_at_midpoint": 13
-    },
-    "SPY": {
-      "premium_range_optimal": { "min": 30, "max": 45 },
-      "premium_range_limits":  { "min": 25, "max": 50 },
-      "contracts_at_midpoint": 43
-    },
-    "QQQ": {
-      "premium_range_optimal": { "min": 30, "max": 60 },
-      "premium_range_limits":  { "min": 25, "max": 65 },
-      "contracts_at_midpoint": 23
     },
     "TSLA": {
       "premium_range_optimal": { "min": 80, "max": 160 },
@@ -94,19 +78,19 @@
           "type": "pre_condition",
           "timeframe": "H1",
           "condition": "Tendencia previa bajista en H1",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "indicators": ["Bollinger Bands", "Media Móvil 20"]
         },
         {
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Ruptura de línea de tendencia bajista en H1",
+          "condition": "Ruptura de línea de tendencia en H1",
           "indicators": ["Trendline"]
         },
         {
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Cierre sobre la MA20 en H1 con vela de confirmación alcista",
-          "indicators": ["MA 20"]
+          "condition": "Cierre sobre la media móvil de 20 periodos en H1 con vela de confirmación alcista",
+          "indicators": ["Media Móvil 20"]
         },
         {
           "type": "confirmation",
@@ -127,19 +111,19 @@
           "type": "pre_condition",
           "timeframe": "H1",
           "condition": "Tendencia previa alcista en H1",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "indicators": ["Bollinger Bands", "Media Móvil 20"]
         },
         {
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Ruptura de línea de tendencia alcista en H1",
+          "condition": "Ruptura de línea de tendencia en H1",
           "indicators": ["Trendline"]
         },
         {
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Cierre bajo la MA20 en H1 con vela de confirmación bajista",
-          "indicators": ["MA 20"]
+          "condition": "Cierre bajo la media móvil de 20 periodos en H1 con vela de confirmación bajista",
+          "indicators": ["Media Móvil 20"]
         },
         {
           "type": "confirmation",
@@ -171,8 +155,8 @@
         {
           "type": "trigger",
           "timeframe": "D1",
-          "condition": "Precio se acerca al punto medio Bollinger en D1 (MA20) sin cruzarlo",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "condition": "Precio se acerca al punto medio Bollinger en D1 (Media Móvil 20) sin cruzarlo",
+          "indicators": ["Bollinger Bands", "Media Móvil 20"]
         },
         {
           "type": "confirmation",
@@ -300,8 +284,8 @@
         {
           "type": "pre_condition",
           "timeframe": "D1",
-          "condition": "Las cuatro MAs (20, 40, 100, 200) laterales o entrelazadas en canal de 10+ días",
-          "indicators": ["MA 20", "MA 40", "MA 100", "MA 200"]
+          "condition": "Las cuatro medias móviles (20, 40, 100, 200) laterales o entrelazadas en canal de 10+ días",
+          "indicators": ["Media Móvil 20", "Media Móvil 40", "Media Móvil 100", "Media Móvil 200"]
         },
         {
           "type": "trigger",
@@ -318,7 +302,7 @@
         {
           "type": "confirmation",
           "timeframe": "H1",
-          "condition": "Alta volatilidad en Bollinger Bands en H1",
+          "condition": "Alta volatilidad en Bollinger Bands en temporalidad H1",
           "indicators": ["Bollinger Bands"]
         }
       ]
@@ -333,8 +317,8 @@
         {
           "type": "pre_condition",
           "timeframe": "D1",
-          "condition": "Las cuatro MAs (20, 40, 100, 200) laterales o entrelazadas en canal de 10+ días",
-          "indicators": ["MA 20", "MA 40", "MA 100", "MA 200"]
+          "condition": "Las cuatro medias móviles (20, 40, 100, 200) laterales o entrelazadas en canal de 10+ días",
+          "indicators": ["Media Móvil 20", "Media Móvil 40", "Media Móvil 100", "Media Móvil 200"]
         },
         {
           "type": "trigger",
@@ -351,7 +335,7 @@
         {
           "type": "confirmation",
           "timeframe": "H1",
-          "condition": "Alta volatilidad en Bollinger Bands en H1",
+          "condition": "Alta volatilidad en Bollinger Bands en temporalidad H1",
           "indicators": ["Bollinger Bands"]
         }
       ]
