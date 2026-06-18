@@ -34,7 +34,7 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 7. `capture_screenshot` → visual confirmation
 
 ### "Change the chart"
-- `chart_set_symbol` → switch ticker (e.g., "AAPL", "ES1!", "NYMEX:CL1!")
+- `chart_set_symbol` → switch ticker (e.g., "NVDA", "ES1!", "NYMEX:CL1!")
 - `chart_set_timeframe` → switch resolution (e.g., "1", "5", "15", "60", "D", "W")
 - `chart_set_type` → switch chart style (Candles, HeikinAshi, Line, Area, Renko, etc.)
 - `chart_manage_indicator` → add or remove studies (use full name: "Relative Strength Index", not "RSI")
@@ -379,10 +379,6 @@ FED: [OK (próx. DD/MM) / HOY ⚠️]  |  [TICKER ⚠️ EARNINGS DD/MM]
    ✅ [cond MA 1]     🔲 [cond MA 2]
    Prima $X.XX–X.XX  |  -25% / +12%
    ⚠ Vigilar: línea BB Middle D1 ($182.40) — alerta manual si rompe hacia arriba
-
-🔴 SPY  → [razón principal en una línea]
-🔴 QQQ  → [razón principal en una línea]
-🔴 AAPL → [razón principal en una línea]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -481,7 +477,7 @@ Llamar `trades_get(10)` y analizar los resultados antes de iniciar el análisis 
 Win rate general: X/N (XX%)
 | Ticker | Strat | Lado | Resultado | Modo |
 |--------|-------|------|-----------|------|
-| AAPL   | S-02  | CALL | +12%      | real |
+| NVDA   | S-02  | CALL | +12%      | real |
 ...
 ⚠️ Alertas: [ej. "STRAT-02 PUT: 0/3 esta semana → baja confianza hoy"]
 ✅ Patrones confirmados: [ej. "BB M15 estrecho + gap up → CALL efectivo (2/2)"]
