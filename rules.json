@@ -1,70 +1,65 @@
 {
-  "watchlist": ["AAPL", "NVDA", "SPY", "TSLA", "QQQ"],
+  "watchlist": [
+    "NVDA",
+    "TSLA"
+  ],
   "default_timeframe": "60",
-
   "fundamental_filters": {
     "_note": "Fallback dates used when Finviz scraping fails. Update quarterly.",
     "fed_dates": [
-      "2026-06-18",
-      "2026-07-30",
-      "2026-09-17",
-      "2026-10-29",
-      "2026-12-10"
+      "2026-07-29",
+      "2026-09-16",
+      "2026-10-28",
+      "2026-12-09"
     ],
     "earnings": {
-      "AAPL": "2026-07-28",
       "NVDA": "2026-08-27"
     }
   },
-
-
   "contract_rules": {
     "type": "CALL or PUT — directional only, no spreads",
     "expiration": "nearest weekly expiration",
     "expiration_cutoff": "Friday 11:00 AM ET — before: current week / after: next week"
   },
-
   "asset_config": {
-    "AAPL": {
-      "premium_range_optimal": { "min": 45, "max": 95 },
-      "premium_range_limits":  { "min": 40, "max": 100 },
-      "contracts_at_midpoint": 23
-    },
     "NVDA": {
-      "premium_range_optimal": { "min": 80, "max": 170 },
-      "premium_range_limits":  { "min": 75, "max": 175 },
+      "premium_range_optimal": {
+        "min": 80,
+        "max": 170
+      },
+      "premium_range_limits": {
+        "min": 75,
+        "max": 175
+      },
       "contracts_at_midpoint": 13
     },
-    "SPY": {
-      "premium_range_optimal": { "min": 30, "max": 45 },
-      "premium_range_limits":  { "min": 25, "max": 50 },
-      "contracts_at_midpoint": 43
-    },
-    "QQQ": {
-      "premium_range_optimal": { "min": 30, "max": 60 },
-      "premium_range_limits":  { "min": 25, "max": 65 },
-      "contracts_at_midpoint": 23
-    },
     "TSLA": {
-      "premium_range_optimal": { "min": 80, "max": 160 },
-      "premium_range_limits":  { "min": 75, "max": 170 },
+      "premium_range_optimal": {
+        "min": 80,
+        "max": 160
+      },
+      "premium_range_limits": {
+        "min": 75,
+        "max": 170
+      },
       "contracts_at_midpoint": 26
     }
   },
-
   "session": {
     "primary_window": "09:30–11:30 ET",
     "focus": "market open — primary profit window",
     "avoid": "FED days ±2 business days, Earnings window ±7 days per ticker"
   },
-
   "strategy": {
     "name": "Options Multi-Strategy — Bollinger + MA System",
-    "version": "2.0",
+    "version": "3.3",
     "sources": [
-      "Bollinger Bands (D1, H1, M15) — trend, bounces, breakouts",
-      "Moving Averages 20/40/100/200 — trend direction and bounce levels",
-      "Trendlines — breakout triggers for trend-change strategies"
+      "Estrategias.pdf — fuente canónica original",
+      "Estrategia Gemini v4.md — transcripción estructurada canónica utilizada para los requisitos",
+      "Video 13 - Master Clase Saltos 12 Jun 2026.md — fuente de STRAT-12",
+      "Manual_Segundo_Salto (1).pptx — manual visual de STRAT-12",
+      "SALIENDO DE BOLLINGER CON VOLATILIDAD IDEAS.txt — alcance y separación conceptual de STRAT-13",
+      "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD — transcripciones fuente de STRAT-13 y del perfil Double Green"
     ],
     "primary_timeframes": [
       "D1 — context and macro trend",
@@ -72,16 +67,14 @@
       "M15 — confirmation and opening strategies"
     ]
   },
-
   "indicators": {
-    "bollinger_bands":    "Primary indicator. Used on D1, H1, M15. Middle band = dynamic support/resistance. Band width = volatility filter.",
-    "ma_20":              "Short-term trend. Price above = bullish bias. Acts as first bounce level.",
-    "ma_40":              "Medium-term trend. Separation from MA20 signals trend strength.",
-    "ma_100":             "Intermediate support/resistance level.",
-    "ma_200":             "Long-term trend baseline.",
-    "trendline":          "Manual breakout trigger. Drawn connecting max/min points on H1 and M15."
+    "bollinger_bands": "Primary indicator. Used on D1, H1, M15. Middle band = dynamic support/resistance. Band width = volatility filter.",
+    "ma_20": "Short-term trend. Price above = bullish bias. Acts as first bounce level.",
+    "ma_40": "Medium-term trend. Separation from MA20 signals trend strength.",
+    "ma_100": "Intermediate support/resistance level.",
+    "ma_200": "Long-term trend baseline.",
+    "trendline": "Manual breakout trigger. Drawn connecting max/min points on H1 and M15."
   },
-
   "strategies": [
     {
       "id": "STRAT-01",
@@ -89,30 +82,44 @@
       "status": "operative",
       "position": "CALL",
       "primary_timeframe": "H1",
+      "_source_page": 1,
+      "_notes": "La ruptura de la línea de tendencia puede ocurrir durante el día o en forma de salto.",
       "rules": [
         {
+          "canonical_id": "STRAT-01-PC-001",
           "type": "pre_condition",
           "timeframe": "H1",
-          "condition": "Tendencia previa bajista en H1",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "condition": "Trazar una línea de tendencia de trayectoria del precio bordeando levemente por encima la mayor cantidad de puntos posibles de la tendencia bajista.",
+          "indicators": [
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-01-TR-001",
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Ruptura de línea de tendencia bajista en H1",
-          "indicators": ["Trendline"]
+          "condition": "El precio debe romper la línea de tendencia bajista; esto puede ocurrir durante el día o en forma de salto.",
+          "indicators": [
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-01-TR-002",
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Cierre sobre la MA20 en H1 con vela de confirmación alcista",
-          "indicators": ["MA 20"]
+          "condition": "El precio debe romper la media móvil de 20 períodos en H1 y terminar con una vela de confirmación alcista.",
+          "indicators": [
+            "MA 20"
+          ]
         },
         {
+          "canonical_id": "STRAT-01-CF-001",
           "type": "confirmation",
           "timeframe": "M15",
-          "condition": "La tendencia en M15 debe mostrarse totalmente alcista",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Cambiar a M15 y verificar que la tendencia se muestre totalmente alcista.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         }
       ]
     },
@@ -122,388 +129,836 @@
       "status": "operative",
       "position": "PUT",
       "primary_timeframe": "H1",
+      "_source_page": 2,
+      "_notes": "La ruptura de la línea de tendencia puede ocurrir durante el día o en forma de salto.",
       "rules": [
         {
+          "canonical_id": "STRAT-02-PC-001",
           "type": "pre_condition",
           "timeframe": "H1",
-          "condition": "Tendencia previa alcista en H1",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "condition": "Trazar una línea de tendencia de trayectoria del precio bordeando levemente por debajo la mayor cantidad de puntos posibles de la tendencia alcista.",
+          "indicators": [
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-02-TR-001",
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Ruptura de línea de tendencia alcista en H1",
-          "indicators": ["Trendline"]
+          "condition": "El precio debe romper la línea de tendencia alcista; esto puede ocurrir durante el día o en forma de salto.",
+          "indicators": [
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-02-TR-002",
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Cierre bajo la MA20 en H1 con vela de confirmación bajista",
-          "indicators": ["MA 20"]
+          "condition": "El precio debe romper la media móvil de 20 períodos en H1 y terminar con una vela de confirmación bajista.",
+          "indicators": [
+            "MA 20"
+          ]
         },
         {
+          "canonical_id": "STRAT-02-CF-001",
           "type": "confirmation",
           "timeframe": "M15",
-          "condition": "La tendencia en M15 debe mostrarse totalmente bajista",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Cambiar a M15 y verificar que la tendencia se muestre totalmente bajista.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         }
       ]
     },
     {
       "id": "STRAT-03",
-      "name": "Rebote en punto medio (Bajista)",
-      "status": "operative",
+      "name": "Rebote en punto medio, tendencia a la baja",
+      "status": "non_operative",
       "position": "PUT",
       "primary_timeframe": "D1",
+      "_source_page": 3,
       "rules": [
         {
+          "canonical_id": "STRAT-03-PC-001",
           "type": "pre_condition",
           "timeframe": "D1",
-          "condition": "Tendencia claramente bajista en D1",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Debemos encontrarnos en una tendencia claramente bajista en Bollinger en la temporalidad D1.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
+          "canonical_id": "STRAT-03-PC-002",
           "type": "pre_condition",
           "timeframe": "H1",
-          "condition": "Tendencia claramente alcista en H1 (retroceso hacia punto medio)",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Debemos encontrarnos en una tendencia claramente alcista en Bollinger en la temporalidad H1.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
+          "canonical_id": "STRAT-03-TR-001",
           "type": "trigger",
           "timeframe": "D1",
-          "condition": "Precio se acerca al punto medio Bollinger en D1 (MA20) sin cruzarlo",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "condition": "Los precios deben venir subiendo y acercándose al punto medio diario, equivalente a la media móvil de 20 períodos.",
+          "indicators": [
+            "Bollinger Bands",
+            "MA 20"
+          ]
         },
         {
+          "canonical_id": "STRAT-03-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "Cuando el precio toque el punto medio diario, verificar que no lo cruce sino que lo respete; cambiar a M15 y esperar que comience a rebotar.",
+          "indicators": [
+            "Bollinger Bands",
+            "MA 20"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-03-CF-002",
           "type": "confirmation",
           "timeframe": "H1",
-          "condition": "Precio respeta el punto medio en H1 sin cruzarlo al alza",
-          "indicators": ["Bollinger Bands"]
+          "condition": "En H1, esperar una vela de confirmación bajista antes de tomar la entrada en PUT.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        }
+      ],
+      "non_operative_reason": "Desactivada por decisión operativa del usuario; se conserva completa como fuente histórica y puede reactivarse sin alterar sus reglas.",
+      "_status_history": [
+        {
+          "date": "2026-06-20",
+          "status": "non_operative",
+          "reason": "Declarada no operativa por el usuario. Estrategia conservada íntegramente como fuente histórica y disponible para reactivación futura."
         }
       ]
     },
     {
       "id": "STRAT-04",
-      "name": "Apertura fuera de Bollinger (PUT)",
+      "name": "Tendencia lateral, apertura fuera de Bollinger al alza sin volatilidad",
       "status": "operative",
       "position": "PUT",
       "primary_timeframe": "M15",
+      "_source_page": 4,
+      "_notes": "Comenzar el análisis minutos antes de la apertura para anticipar un salto considerable al alza respecto del cierre anterior.",
       "rules": [
         {
+          "canonical_id": "STRAT-04-PC-001",
           "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "La tendencia en M15 debe ser totalmente lateral",
-          "indicators": ["Bollinger Bands"]
+          "condition": "En M15, la tendencia en Bollinger debe ser totalmente lateral y sin volatilidad.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
-          "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "Sin volatilidad en Bollinger Bands M15 (bandas estrechas)",
-          "indicators": ["Bollinger Bands"]
-        },
-        {
+          "canonical_id": "STRAT-04-TR-001",
           "type": "trigger",
           "timeframe": "M15",
-          "condition": "Apertura con salto extremadamente alejado de la banda superior (sobrecompra)",
-          "indicators": ["Bollinger Bands"]
+          "condition": "El precio debe abrir con un salto al alza y quedar extremadamente alejado de la banda superior, en zona de sobrecompra.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-04-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "Observar que el precio comience a bajar.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-04-CF-002",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "Ejecutar la compra de contratos PUT dentro de los primeros 5 minutos de la apertura; pasado ese tiempo la estrategia podría quedar sin efecto.",
+          "indicators": []
         }
       ]
     },
     {
       "id": "STRAT-05",
-      "name": "Apertura fuera de Bollinger (CALL)",
+      "name": "Tendencia lateral, apertura fuera de Bollinger a la baja sin volatilidad",
       "status": "operative",
       "position": "CALL",
       "primary_timeframe": "M15",
+      "_source_page": 5,
+      "_notes": "La rentabilidad suele darse en los primeros movimientos del mercado; el desplazamiento puede ocurrir dentro de los primeros 15 minutos.",
       "rules": [
         {
+          "canonical_id": "STRAT-05-PC-001",
           "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "La tendencia en M15 debe ser totalmente lateral",
-          "indicators": ["Bollinger Bands"]
+          "condition": "En M15, la tendencia en Bollinger debe ser totalmente lateral y sin volatilidad.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
-          "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "Sin volatilidad en Bollinger Bands M15 (bandas estrechas)",
-          "indicators": ["Bollinger Bands"]
-        },
-        {
+          "canonical_id": "STRAT-05-TR-001",
           "type": "trigger",
           "timeframe": "M15",
-          "condition": "Apertura con salto extremadamente alejado de la banda inferior (sobreventa)",
-          "indicators": ["Bollinger Bands"]
+          "condition": "El precio debe abrir con un salto a la baja y quedar extremadamente alejado de la banda inferior, en zona de sobreventa.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-05-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "Observar que el precio comience a subir.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-05-CF-002",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "Ejecutar la compra de contratos CALL dentro de los primeros 5 minutos de la apertura; pasado ese tiempo la estrategia podría quedar sin efecto.",
+          "indicators": []
+        }
+      ]
+    },
+    {
+      "id": "STRAT-06",
+      "name": "Efecto Imán, tendencia bajista",
+      "status": "non_operative",
+      "non_operative_reason": "La confirmación requiere Worden Stochastics de TC2000, indicador no disponible mediante la API actual del MCP.",
+      "position": "CALL",
+      "primary_timeframe": "H1",
+      "_source_page": 6,
+      "rules": [
+        {
+          "canonical_id": "STRAT-06-PC-001",
+          "type": "pre_condition",
+          "timeframe": "H1",
+          "condition": "En las medias móviles debemos encontrarnos en una tendencia claramente bajista; el precio debe llevar varios días bajando.",
+          "indicators": [
+            "MA 20",
+            "MA 40"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-06-TR-001",
+          "type": "trigger",
+          "timeframe": "H1",
+          "condition": "El precio debe abrir con un fuerte salto a la baja y quedar muy alejado de la media móvil de 20 períodos.",
+          "indicators": [
+            "MA 20"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-06-TR-002",
+          "type": "trigger",
+          "timeframe": "M15",
+          "condition": "En Bollinger M15, la primera vela debe quedar completamente fuera de la banda inferior.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-06-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "Cuando comience a formarse la vela en el indicador de volumen, deberá cruzar la línea roja de Worden Stochastics para confirmar la compra de contratos CALL.",
+          "indicators": [
+            "Volume",
+            "Worden Stochastics"
+          ]
+        }
+      ],
+      "_status_history": [
+        {
+          "date": "2026-06-20",
+          "status": "non_operative",
+          "reason": "Declarada no operativa por el usuario. Estrategia conservada íntegramente como fuente histórica y disponible para reactivación futura."
+        }
+      ]
+    },
+    {
+      "id": "STRAT-07",
+      "name": "Efecto Imán, tendencia alcista",
+      "status": "non_operative",
+      "non_operative_reason": "La confirmación requiere Worden Stochastics de TC2000, indicador no disponible mediante la API actual del MCP.",
+      "position": "PUT",
+      "primary_timeframe": "H1",
+      "_source_page": 7,
+      "rules": [
+        {
+          "canonical_id": "STRAT-07-PC-001",
+          "type": "pre_condition",
+          "timeframe": "H1",
+          "condition": "En las medias móviles debemos encontrarnos en una tendencia claramente alcista; el precio debe llevar varios días subiendo.",
+          "indicators": [
+            "MA 20",
+            "MA 40"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-07-TR-001",
+          "type": "trigger",
+          "timeframe": "H1",
+          "condition": "El precio debe abrir con un fuerte salto al alza y quedar muy alejado de la media móvil de 20 períodos.",
+          "indicators": [
+            "MA 20"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-07-TR-002",
+          "type": "trigger",
+          "timeframe": "M15",
+          "condition": "En Bollinger M15, la primera vela debe quedar completamente fuera de la banda superior.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-07-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "Cuando comience a formarse la vela en el indicador de volumen, deberá cruzar la línea roja de Worden Stochastics para confirmar la compra de contratos PUT.",
+          "indicators": [
+            "Volume",
+            "Worden Stochastics"
+          ]
+        }
+      ],
+      "_status_history": [
+        {
+          "date": "2026-06-20",
+          "status": "non_operative",
+          "reason": "Declarada no operativa por el usuario. Estrategia conservada íntegramente como fuente histórica y disponible para reactivación futura."
         }
       ]
     },
     {
       "id": "STRAT-08",
-      "name": "Cambio tendencia 15 min (CALL)",
+      "name": "Cambio de tendencia al alza, Bollinger 15 minutos",
       "status": "operative",
       "position": "CALL",
       "primary_timeframe": "M15",
+      "_source_page": 8,
       "rules": [
         {
+          "canonical_id": "STRAT-08-PC-001",
           "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "Tendencia bajista o lateral en M15",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Debemos encontrarnos en una tendencia bajista o lateral en M15.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
-          "type": "trigger",
+          "canonical_id": "STRAT-08-PC-002",
+          "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "Ruptura de línea de tendencia bajista en M15",
-          "indicators": ["Trendline"]
+          "condition": "Trazar una línea de tendencia desde el punto máximo del día hasta el mínimo por la parte superior del precio, bordeando la mayor cantidad de puntos posibles.",
+          "indicators": [
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-08-TR-001",
           "type": "trigger",
           "timeframe": "M15",
-          "condition": "Apertura sobre el punto medio de Bollinger en M15 con volatilidad inmediata",
-          "indicators": ["Bollinger Bands"]
+          "condition": "El precio debe amanecer con un salto al alza que rompa simultáneamente el punto medio de Bollinger y la línea de tendencia.",
+          "indicators": [
+            "Bollinger Bands",
+            "Trendline"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-08-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "La volatilidad debe abrir inmediatamente para tomar posición en CALL.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         }
       ]
     },
     {
       "id": "STRAT-09",
-      "name": "Cambio tendencia 15 min (PUT)",
+      "name": "Cambio de tendencia a la baja, Bollinger 15 minutos",
       "status": "operative",
       "position": "PUT",
       "primary_timeframe": "M15",
+      "_source_page": 9,
       "rules": [
         {
+          "canonical_id": "STRAT-09-PC-001",
           "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "Tendencia alcista o lateral en M15",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Debemos encontrarnos en una tendencia alcista o lateral en M15.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
-          "type": "trigger",
+          "canonical_id": "STRAT-09-PC-002",
+          "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "Ruptura de línea de tendencia alcista en M15",
-          "indicators": ["Trendline"]
+          "condition": "Trazar una línea de tendencia desde el punto máximo del día hasta el máximo por la parte inferior del precio, bordeando la mayor cantidad de puntos posibles.",
+          "indicators": [
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-09-TR-001",
           "type": "trigger",
           "timeframe": "M15",
-          "condition": "Apertura bajo el punto medio de Bollinger en M15 con volatilidad inmediata",
-          "indicators": ["Bollinger Bands"]
+          "condition": "El precio debe amanecer con un salto a la baja que rompa simultáneamente el punto medio de Bollinger y la línea de tendencia.",
+          "indicators": [
+            "Bollinger Bands",
+            "Trendline"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-09-CF-001",
+          "type": "confirmation",
+          "timeframe": "M15",
+          "condition": "La volatilidad debe abrir inmediatamente para tomar posición en PUT.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         }
       ]
     },
     {
       "id": "STRAT-10",
-      "name": "Ruptura Lateral Mediano Plazo (CALL)",
-      "status": "operative",
+      "name": "Cambio de tendencia lateral al alza a mediano plazo",
+      "status": "non_operative",
       "position": "CALL",
       "primary_timeframe": "H1",
+      "_source_page": 10,
       "rules": [
         {
+          "canonical_id": "STRAT-10-PC-001",
           "type": "pre_condition",
           "timeframe": "D1",
-          "condition": "Las cuatro MAs (20, 40, 100, 200) laterales o entrelazadas en canal de 10+ días",
-          "indicators": ["MA 20", "MA 40", "MA 100", "MA 200"]
+          "condition": "Las cuatro medias móviles de 20, 40, 100 y 200 períodos deben mostrarse laterales o entrelazadas dentro del canal lateral; deben predominar las de 100 y 200 períodos y el precio suele moverse entre las medias.",
+          "indicators": [
+            "MA 20",
+            "MA 40",
+            "MA 100",
+            "MA 200"
+          ]
         },
         {
+          "canonical_id": "STRAT-10-PC-002",
+          "type": "pre_condition",
+          "timeframe": "D1",
+          "condition": "El precio debe permanecer dentro del canal durante 10 días o más y podría superar los 30 días, respetando los puntos de rebote del canal.",
+          "indicators": [
+            "MA 20",
+            "MA 40",
+            "MA 100",
+            "MA 200"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-10-TR-001",
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Señal alcista que saque el precio del canal (salto o vela alcista potente)",
-          "indicators": ["Trendline", "Bollinger Bands"]
+          "condition": "Debe presentarse una señal alcista que saque el precio del canal, ya sea mediante un salto o una vela alcista o extremadamente alcista.",
+          "indicators": [
+            "Bollinger Bands",
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-10-CF-001",
           "type": "confirmation",
           "timeframe": "H1",
-          "condition": "Confirmación con vela alcista en H1",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Esperar una vela final de confirmación alcista.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
+          "canonical_id": "STRAT-10-CF-002",
           "type": "confirmation",
           "timeframe": "H1",
-          "condition": "Alta volatilidad en Bollinger Bands en H1",
-          "indicators": ["Bollinger Bands"]
+          "condition": "La confirmación debe presentarse en Bollinger Bands H1 con alta volatilidad antes de tomar acción en CALL.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        }
+      ],
+      "non_operative_reason": "Desactivada por decisión operativa del usuario; se conserva completa como fuente histórica y puede reactivarse sin alterar sus reglas.",
+      "_status_history": [
+        {
+          "date": "2026-06-20",
+          "status": "non_operative",
+          "reason": "Declarada no operativa por el usuario. Estrategia conservada íntegramente como fuente histórica y disponible para reactivación futura."
         }
       ]
     },
     {
       "id": "STRAT-11",
-      "name": "Ruptura Lateral Mediano Plazo (PUT)",
-      "status": "operative",
+      "name": "Cambio de tendencia lateral a la baja a mediano plazo",
+      "status": "non_operative",
       "position": "PUT",
       "primary_timeframe": "H1",
+      "_source_page": 11,
       "rules": [
         {
+          "canonical_id": "STRAT-11-PC-001",
           "type": "pre_condition",
           "timeframe": "D1",
-          "condition": "Las cuatro MAs (20, 40, 100, 200) laterales o entrelazadas en canal de 10+ días",
-          "indicators": ["MA 20", "MA 40", "MA 100", "MA 200"]
+          "condition": "Las cuatro medias móviles de 20, 40, 100 y 200 períodos deben mostrarse laterales o entrelazadas dentro del canal lateral; deben predominar las de 100 y 200 períodos y el precio suele moverse entre las medias.",
+          "indicators": [
+            "MA 20",
+            "MA 40",
+            "MA 100",
+            "MA 200"
+          ]
         },
         {
+          "canonical_id": "STRAT-11-PC-002",
+          "type": "pre_condition",
+          "timeframe": "D1",
+          "condition": "El precio debe permanecer dentro del canal durante 10 días o más y podría superar los 30 días, respetando los puntos de rebote del canal.",
+          "indicators": [
+            "MA 20",
+            "MA 40",
+            "MA 100",
+            "MA 200"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-11-TR-001",
           "type": "trigger",
           "timeframe": "H1",
-          "condition": "Señal bajista que saque el precio del canal (salto o vela bajista potente)",
-          "indicators": ["Trendline", "Bollinger Bands"]
+          "condition": "Debe presentarse una señal bajista que saque el precio del canal, ya sea mediante un salto o una vela bajista o extremadamente bajista.",
+          "indicators": [
+            "Bollinger Bands",
+            "Trendline"
+          ]
         },
         {
+          "canonical_id": "STRAT-11-CF-001",
           "type": "confirmation",
           "timeframe": "H1",
-          "condition": "Confirmación con vela bajista en H1",
-          "indicators": ["Bollinger Bands"]
+          "condition": "Esperar una vela final de confirmación bajista.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
+          "canonical_id": "STRAT-11-CF-002",
           "type": "confirmation",
           "timeframe": "H1",
-          "condition": "Alta volatilidad en Bollinger Bands en H1",
-          "indicators": ["Bollinger Bands"]
+          "condition": "La confirmación debe presentarse en Bollinger Bands H1 con alta volatilidad antes de tomar acción en PUT.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        }
+      ],
+      "non_operative_reason": "Desactivada por decisión operativa del usuario; se conserva completa como fuente histórica y puede reactivarse sin alterar sus reglas.",
+      "_status_history": [
+        {
+          "date": "2026-06-20",
+          "status": "non_operative",
+          "reason": "Declarada no operativa por el usuario. Estrategia conservada íntegramente como fuente histórica y disponible para reactivación futura."
         }
       ]
     },
     {
       "id": "STRAT-12",
-      "name": "Double Green — Cambio de Tendencia M15 (CALL)",
+      "name": "Estrategia-segundo-salto",
       "status": "operative",
-      "position": "CALL",
-      "primary_timeframe": "M15",
-      "_notes": "Estrategia más usada diariamente. 3 ventanas de entrada: Ventana 1=1ª vela M15 (más potente), Ventana 2=Double Green 2ª vela, Ventana 3=BB abre antes del disipador. CRÍTICO: precio debe estar DENTRO de Bollinger M15 al abrir — si abre expuesto → STRAT-04/05.",
+      "position": "CALL or PUT — en la misma dirección del primer salto",
+      "primary_timeframe": "H1",
+      "_source_files": [
+        "Video 13 - Master Clase Saltos 12 Jun 2026.md",
+        "Manual_Segundo_Salto (1).pptx"
+      ],
+      "_source_scope": "Manual completo, diapositivas 1–15, y transcripción completa con aclaraciones de preguntas y respuestas.",
+      "_source_conflict_resolution": [
+        "Salto en efecto: el manual presenta el cruce del cierre anterior como invalidación inmediata; la aclaración posterior de la clase establece que puede cruzarlo intradía si al cierre de la sesión vuelve a terminar del lado correcto. Esta regla usa el cierre de la sesión como árbitro final.",
+        "EMA40: la matriz del manual exige ruptura de EMA20 y EMA40; la clase aclara que EMA40 es la confirmación ideal y admite una excepción si queda más de USD 1 de espacio hasta EMA40 o la siguiente resistencia/soporte. La excepción se conserva expresamente."
+      ],
+      "_notes": "La estrategia opera exclusivamente el segundo salto. No intenta predecir ni entrar en el primer salto. Un salto aislado sin todos los requisitos no pertenece a STRAT-12.",
+      "directional_variants": [
+        {
+          "setup": "bullish",
+          "prior_trend": "Tendencia bajista agotada de 5 o más días",
+          "first_gap": "Salto al alza",
+          "second_gap": "Salto al alza",
+          "position": "CALL"
+        },
+        {
+          "setup": "bearish",
+          "prior_trend": "Tendencia alcista agotada de 5 o más días",
+          "first_gap": "Salto a la baja",
+          "second_gap": "Salto a la baja",
+          "position": "PUT"
+        }
+      ],
+      "risk_override": {
+        "max_invest_pct_account": 5,
+        "separate_jump_capital_recommended": true,
+        "condition": "La probabilidad pura del salto se describe como 50/50; nunca usar el tamaño normal de posición. Para STRAT-12 prevalece un máximo de 5% de la cuenta sobre risk_rules.invest_pct_per_trade."
+      },
+      "exit_override": {
+        "order_type": "GTC LIMIT",
+        "profit_target_pct": 12,
+        "profit_target_source": "exit_rules.profit_target_pct",
+        "sell_at_market_open": false,
+        "condition": "Mantener una orden LIMIT antes de la apertura. Si el contrato abre por encima del límite, el broker debe ejecutar al mejor precio disponible. Nunca vender MARKET en la apertura y no convertir el salto en una operación intradía."
+      },
       "rules": [
         {
           "canonical_id": "STRAT-12-PC-001",
           "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "Tendencia bajista o lateral en M15 el día anterior (punto medio M15 bajista o lateral)",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "timeframe": "H1",
+          "condition": "Debe existir una tendencia direccional previa de al menos 5 días consecutivos: 5 o más días bajando para preparar un segundo salto alcista, o 5 o más días subiendo para preparar un segundo salto bajista. Una lateralidad o una tendencia de 3–4 días invalida la estrategia.",
+          "indicators": [
+            "EMA 20",
+            "EMA 40",
+            "Price Action"
+          ]
         },
         {
           "canonical_id": "STRAT-12-PC-002",
           "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "CUERPO de la última vela M15 del día anterior cerró POR DEBAJO de punto medio (BB middle M15). La sombra puede estar por arriba, lo que cuenta es el cuerpo.",
-          "indicators": ["Bollinger Bands"]
+          "timeframe": "H1",
+          "condition": "La tendencia previa debe mostrar agotamiento: trazar una Edge Line u horizontal en el último mínimo/máximo relevante y verificar que el siguiente impulso no produzca un nuevo mínimo en tendencia bajista ni un nuevo máximo en tendencia alcista; puede aparecer lateralización y pérdida de fuerza.",
+          "indicators": [
+            "Edge Line",
+            "Price Action",
+            "EMA 20",
+            "EMA 40"
+          ]
         },
         {
           "canonical_id": "STRAT-12-PC-003",
           "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "Precio al cierre del día anterior dentro de Bollinger M15 (NO expuesto — no tocando ni superando disipador superior). Si abre expuesto al día siguiente, la estrategia se cancela.",
-          "indicators": ["Bollinger Bands"]
+          "timeframe": "D1/H1/M15",
+          "condition": "Revisar el panorama completo en Bollinger D1, H1 y M15. El primer salto no debe dejar el precio expuesto fuera de Bollinger D1 y debe existir espacio libre para continuar en la dirección esperada; una exposición extrema o un techo/piso inmediato invalida la estrategia.",
+          "indicators": [
+            "Bollinger Bands",
+            "EMA 20",
+            "EMA 40"
+          ]
         },
         {
           "canonical_id": "STRAT-12-PC-004",
           "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "Línea de tendencia trazada bordeando POR ARRIBA la mayor cantidad de máximos posibles (tendencia bajista confirmada en M15)",
-          "indicators": ["Trendline"]
-        },
-        {
-          "canonical_id": "STRAT-12-PC-005",
-          "type": "pre_condition",
-          "timeframe": "H1",
-          "condition": "Panorama completo verificado: no hay techos/pisos fuertes en H1 y D1 que frenen el movimiento esperado al alza. Bollinger y MAs en H1/D1 revisados.",
-          "indicators": ["Bollinger Bands", "MA 20", "MA 40", "MA 100", "MA 200"]
+          "timeframe": null,
+          "condition": "Debe existir aislamiento macro: sin reunión de la FED, inflación, anuncio económico de alto impacto ni earnings del activo programados para la siguiente apertura o mañana. Los filtros globales FED ±2 días hábiles y Earnings ±7 días continúan siendo obligatorios.",
+          "indicators": []
         },
         {
           "canonical_id": "STRAT-12-TR-001",
           "type": "trigger",
-          "timeframe": "M15",
-          "condition": "Salto (gap up) al abrir el mercado (9:30 ET) que rompe SIMULTÁNEAMENTE la línea de tendencia Y el punto medio M15. Sin salto = estrategia cancelada.",
-          "indicators": ["Trendline", "Bollinger Bands"]
+          "timeframe": "H1",
+          "condition": "Debe haberse producido un primer salto innegable en dirección opuesta a la tendencia agotada: gap al alza después de una tendencia bajista, o gap a la baja después de una tendencia alcista. Sin primer salto válido no existe Estrategia Segundo Salto.",
+          "indicators": [
+            "Price Gap",
+            "Price Action"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-12-TR-002",
+          "type": "trigger",
+          "timeframe": "H1",
+          "condition": "Durante el día del primer salto, el precio debe romper EMA20 y, como confirmación ideal, EMA40 en la dirección del salto. Excepción aclarada en la clase: si EMA40 aún no se rompe, solo puede conservarse la estrategia cuando exista más de USD 1 de espacio hasta EMA40 o hasta la siguiente resistencia/soporte en la dirección esperada; sin ese espacio se invalida.",
+          "indicators": [
+            "EMA 20",
+            "EMA 40"
+          ]
         },
         {
           "canonical_id": "STRAT-12-CF-001",
           "type": "confirmation",
-          "timeframe": "M15",
-          "condition": "VENTANA 1 (más potente) — 1ª vela M15 (9:30–9:45 ET): precio abre DENTRO de Bollinger (no expuesto) + punto medio vira al alza + volatilidad (disipadores) se abre INMEDIATAMENTE al abrir el mercado.",
-          "indicators": ["Bollinger Bands"]
+          "timeframe": "D1",
+          "condition": "Al cierre del día del primer salto, el salto debe seguir en efecto respecto del cierre anterior: para salto alcista el precio debe terminar por encima del cierre anterior; para salto bajista debe terminar por debajo. Un cruce intradía no invalida por sí solo si la sesión finaliza nuevamente del lado correcto.",
+          "indicators": [
+            "Previous Close",
+            "Price Action"
+          ]
         },
         {
           "canonical_id": "STRAT-12-CF-002",
           "type": "confirmation",
-          "timeframe": "M15",
-          "condition": "VENTANA 2 — Double Green (2ª vela M15, ~9:45 ET): precio sigue dentro de Bollinger + punto medio ya virado al alza + la volatilidad se abre en la 2ª vela + precio rompe precio de cierre del día anterior.",
-          "indicators": ["Bollinger Bands"]
+          "timeframe": null,
+          "condition": "Para NVDA y TSLA, ejecutar la entrada exactamente a las 3:55 PM ET, cinco minutos antes del cierre regular, solo después de validar todas las condiciones. No comprar en premarket ni anticipar la entrada.",
+          "indicators": []
         },
         {
           "canonical_id": "STRAT-12-CF-003",
           "type": "confirmation",
-          "timeframe": "M15",
-          "condition": "VENTANA 3 — Saliendo de Bollinger con volatilidad (3ª vela M15 en adelante): precio dentro de BB + punto medio virado al alza + rompe precio de cierre + la volatilidad se abre ANTES de que el precio llegue al disipador. INVALIDACIÓN: si el precio ya está expuesto → NO entrar.",
-          "indicators": ["Bollinger Bands"]
+          "timeframe": null,
+          "condition": "El contrato no puede expirar el mismo día de la entrada: debe permanecer vigente durante la apertura siguiente. Si la entrada es viernes, usar vencimiento de la semana siguiente. Strike y prima deben respetar contract_rules y asset_config del ticker.",
+          "indicators": []
+        },
+        {
+          "canonical_id": "STRAT-12-CF-004",
+          "type": "confirmation",
+          "timeframe": "Next session open",
+          "condition": "El segundo salto esperado debe abrir en la misma dirección que el primero: primer salto al alza implica segundo salto al alza y posición CALL; primer salto a la baja implica segundo salto a la baja y posición PUT. La dirección no se invierte.",
+          "indicators": [
+            "Price Gap"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-12-CF-005",
+          "type": "confirmation",
+          "timeframe": "Next session open",
+          "condition": "Antes de la apertura, mantener colocada una orden GTC LIMIT con el objetivo del plan. Capitalizar el segundo salto en la apertura; nunca vender MARKET por el spread y el slippage, y no dejar correr la posición como movimiento intradía.",
+          "indicators": []
         }
       ]
     },
     {
       "id": "STRAT-13",
-      "name": "Double Green — Cambio de Tendencia M15 (PUT)",
+      "name": "Saliendo de Bollinger con Volatilidad",
       "status": "operative",
-      "position": "PUT",
+      "position": "CALL or PUT — según la dirección de salida",
       "primary_timeframe": "M15",
-      "_notes": "Espejo de STRAT-12 para dirección bajista. Mismas 3 ventanas de entrada. CRÍTICO: precio debe estar DENTRO de Bollinger M15 al abrir — si abre expuesto → STRAT-04/05.",
+      "_source_files": [
+        "SALIENDO DE BOLLINGER CON VOLATILIDAD IDEAS.txt",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 02 - Dg Opciones 8 May 2026.md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 03 - 1 Cambio De Tendencia En 15 Min (Alza Y Baja).md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 04 - 1. Cómo Analizar El Pre Market.md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 05 - 2. Periodos De Volatilidad En 15 Min.md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 06 - 3. Falsos Cambios De Tendencia En 15 Min.md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 07 - 4. Cómo Debe Verse El Cambio De Tendencia En 15 Min.md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 08 - 5. Consejos Y Panorama Ideal Salinendo De Bollinger Con Volatilidad.md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 10 - Dg Opciones 22 May 2026.md",
+        "BIBLIOGRAFIA SALIENDO DE BOLLINGER CON VOLATILIDAD/Video 15 - Dg Opciones 8 Jun 2026.md"
+      ],
+      "_classification_priority": "SI UNA ENTRADA CUMPLE STRAT-08/09, SE CLASIFICA ÚNICAMENTE CON ESE ID; SALIENDO DE BOLLINGER ES EL MOVIMIENTO SUBYACENTE Y DOUBLE GREEN EL MÉTODO DE EJECUCIÓN.",
+      "_not_required": [
+        "No requiere salto de apertura.",
+        "No requiere ruptura de línea de tendencia.",
+        "No requiere que el activo haya abierto dentro de Bollinger a las 9:30 AM.",
+        "No requiere ruptura del precio de cierre anterior.",
+        "No requiere un periodo previo de baja volatilidad."
+      ],
+      "_entry_scope": "Puede aparecer en cualquier momento de la sesión regular. Si el precio abrió expuesto, puede calificarse después de volver al corazón de Bollinger y cumplir nuevamente todos los requisitos.",
+      "directional_variants": [
+        {
+          "setup": "bullish",
+          "position": "CALL",
+          "required_zone_at_confirmation": "Precio dentro de Bollinger M15, en la zona intermedia entre el punto medio M15 y el disipador superior.",
+          "midpoint_direction": "Punto medio M15 alcista o virando claramente al alza.",
+          "volatility_direction": "Disipador superior abriéndose antes de que el precio lo alcance."
+        },
+        {
+          "setup": "bearish",
+          "position": "PUT",
+          "required_zone_at_confirmation": "Precio dentro de Bollinger M15, en la zona intermedia entre el punto medio M15 y el disipador inferior.",
+          "midpoint_direction": "Punto medio M15 bajista o virando claramente a la baja.",
+          "volatility_direction": "Disipador inferior abriéndose antes de que el precio lo alcance."
+        }
+      ],
+      "powerful_pluses": [
+        "Ruptura del precio de cierre del día anterior en la dirección del movimiento.",
+        "Periodo previo de baja volatilidad seguido por apertura de alta volatilidad.",
+        "Bollinger D1 y H1 abriendo volatilidad en la misma dirección.",
+        "Apertura de las 9:30 AM dentro de Bollinger M15."
+      ],
+      "invalidations": [
+        "El precio ya alcanzó, tocó o quedó fuera del disipador antes de que la volatilidad abriera con claridad: entrada tardía o expuesta.",
+        "La volatilidad permanece cerrada cuando el precio llega al disipador.",
+        "Punto medio M15 lateral o virado contra la dirección pretendida.",
+        "Movimiento indeciso, fluctuante o sin fuerza direccional sostenida.",
+        "Techo, piso, Edge Line o media móvil inmediata sin espacio suficiente para el plan.",
+        "Spread anormal, prima fuera del rango permitido o distancia atípica entre spot y strike."
+      ],
       "rules": [
         {
           "canonical_id": "STRAT-13-PC-001",
           "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "Tendencia alcista o lateral en M15 el día anterior (punto medio M15 alcista o lateral)",
-          "indicators": ["Bollinger Bands", "MA 20"]
+          "condition": "En el momento de la confirmación, el precio debe estar dentro de Bollinger M15, en el espacio intermedio entre el punto medio y el disipador correspondiente a la dirección: entre PM15 y disipador superior para CALL, o entre PM15 y disipador inferior para PUT. No necesita tocar PM15 ni haber abierto allí a las 9:30.",
+          "indicators": [
+            "Bollinger Bands",
+            "MA 20"
+          ]
         },
         {
           "canonical_id": "STRAT-13-PC-002",
           "type": "pre_condition",
           "timeframe": "M15",
-          "condition": "CUERPO de la última vela M15 del día anterior cerró POR ARRIBA de punto medio (BB middle M15). La sombra puede estar por abajo, lo que cuenta es el cuerpo.",
-          "indicators": ["Bollinger Bands"]
+          "condition": "El precio debe estar del lado correcto del punto medio y el punto medio M15 debe estar virado o virando claramente en la dirección del movimiento: alcista para CALL y bajista para PUT.",
+          "indicators": [
+            "Bollinger Bands",
+            "MA 20"
+          ]
         },
         {
           "canonical_id": "STRAT-13-PC-003",
           "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "Precio al cierre del día anterior dentro de Bollinger M15 (NO expuesto — no tocando ni superando disipador inferior). Si abre expuesto al día siguiente, la estrategia se cancela.",
-          "indicators": ["Bollinger Bands"]
-        },
-        {
-          "canonical_id": "STRAT-13-PC-004",
-          "type": "pre_condition",
-          "timeframe": "M15",
-          "condition": "Línea de tendencia trazada bordeando POR ABAJO la mayor cantidad de mínimos posibles (tendencia alcista confirmada en M15)",
-          "indicators": ["Trendline"]
-        },
-        {
-          "canonical_id": "STRAT-13-PC-005",
-          "type": "pre_condition",
-          "timeframe": "H1",
-          "condition": "Panorama completo verificado: no hay pisos/soportes fuertes en H1 y D1 que frenen el movimiento esperado a la baja. Bollinger y MAs en H1/D1 revisados.",
-          "indicators": ["Bollinger Bands", "MA 20", "MA 40", "MA 100", "MA 200"]
+          "timeframe": "D1/H1/M15",
+          "condition": "Revisar panorama completo en D1, H1 y M15. Debe existir espacio suficiente hasta el siguiente techo, piso, Edge Line, media móvil o nivel relevante para alcanzar el objetivo del plan; una barrera inmediata invalida la entrada.",
+          "indicators": [
+            "Bollinger Bands",
+            "MA 20",
+            "MA 40",
+            "MA 100",
+            "MA 200",
+            "Edge Line"
+          ]
         },
         {
           "canonical_id": "STRAT-13-TR-001",
           "type": "trigger",
           "timeframe": "M15",
-          "condition": "Salto (gap down) al abrir el mercado (9:30 ET) que rompe SIMULTÁNEAMENTE la línea de tendencia Y el punto medio M15 a la baja. Sin salto = estrategia cancelada.",
-          "indicators": ["Trendline", "Bollinger Bands"]
+          "condition": "La volatilidad debe comenzar a abrirse con claridad en la dirección del movimiento mientras el precio todavía permanece dentro de Bollinger y antes de que alcance el disipador correspondiente.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
+        },
+        {
+          "canonical_id": "STRAT-13-TR-002",
+          "type": "trigger",
+          "timeframe": "M15",
+          "condition": "El precio debe salir desde el interior de Bollinger con fuerza direccional sostenida. CALL requiere impulso alcista claro; PUT requiere impulso bajista claro. Subidas y bajadas alternadas, lateralidad o indecisión no confirman el movimiento.",
+          "indicators": [
+            "Bollinger Bands",
+            "Price Action"
+          ]
         },
         {
           "canonical_id": "STRAT-13-CF-001",
           "type": "confirmation",
           "timeframe": "M15",
-          "condition": "VENTANA 1 (más potente) — 1ª vela M15 (9:30–9:45 ET): precio abre DENTRO de Bollinger (no expuesto) + punto medio vira a la baja + volatilidad (disipadores) se abre INMEDIATAMENTE al abrir el mercado.",
-          "indicators": ["Bollinger Bands"]
+          "condition": "La apertura de volatilidad debe ocurrir antes de que el precio quede expuesto. Si el precio ya está tocando o fuera del disipador cuando aparece la señal, no entrar ni perseguir el movimiento; debe esperarse una nueva entrada al corazón de Bollinger.",
+          "indicators": [
+            "Bollinger Bands"
+          ]
         },
         {
           "canonical_id": "STRAT-13-CF-002",
           "type": "confirmation",
-          "timeframe": "M15",
-          "condition": "VENTANA 2 — Double Green (2ª vela M15, ~9:45 ET): precio sigue dentro de Bollinger + punto medio ya virado a la baja + la volatilidad se abre en la 2ª vela + precio rompe precio de cierre del día anterior a la baja.",
-          "indicators": ["Bollinger Bands"]
+          "timeframe": null,
+          "condition": "Antes de ejecutar, la prima debe estar dentro del rango del activo, la distancia spot–strike debe ser habitual y el spread bid/ask debe ser normal. Cualquier anomalía cancela la operación aunque el gráfico cumpla.",
+          "indicators": [
+            "Option Chain",
+            "Bid/Ask Spread"
+          ]
         },
         {
           "canonical_id": "STRAT-13-CF-003",
           "type": "confirmation",
-          "timeframe": "M15",
-          "condition": "VENTANA 3 — Saliendo de Bollinger con volatilidad (3ª vela M15 en adelante): precio dentro de BB + punto medio virado a la baja + rompe precio de cierre a la baja + la volatilidad se abre ANTES de que el precio llegue al disipador inferior. INVALIDACIÓN: si el precio ya está expuesto → NO entrar.",
-          "indicators": ["Bollinger Bands"]
+          "timeframe": null,
+          "condition": "Aplicar la gestión global obligatoria para todas las estrategias: objetivo de beneficio +12% y stop loss −15%, con una sola posición concurrente.",
+          "indicators": []
         }
       ]
     }
   ],
-
   "global_filters": [
     {
       "id": "GLOBAL-GF-001",
@@ -516,14 +971,12 @@
       "condition": "No operar en ventana Earnings ±7 días del activo"
     }
   ],
-
   "exit_rules": {
     "profit_target_pct": 12,
-    "stop_loss_pct": 25,
+    "stop_loss_pct": 15,
     "order_type": "GTC",
-    "notes": "Both orders placed immediately at entry as GTC bracket"
+    "notes": "Global mandatory bracket for every strategy: +12% profit target and -15% stop loss; both orders placed immediately at entry as GTC."
   },
-
   "risk_rules": {
     "account_size_usd": 3240,
     "invest_pct_per_trade": 50,
@@ -532,7 +985,6 @@
     "bid_ask_filter": "manual — skip if spread is abnormal vs ticker average",
     "max_concurrent_positions": 1
   },
-
   "checklist_premarket": [
     "Bollinger D1: marcar punto medio como techo o piso",
     "Bollinger H1: analizar si precio está dentro de bandas, PM como rebote",
@@ -542,7 +994,6 @@
     "Bid/Ask: verificar spread normal para el activo",
     "Premarket: identificar dónde va a abrir el mercado"
   ],
-
   "bias_criteria": {
     "bullish": [
       "Price is above BB middle band (D1) — BB middle acts as floor",
@@ -564,6 +1015,45 @@
       "Price is chopping inside Bollinger Bands on H1 with no clear direction"
     ]
   },
-
-  "notes": "Options strategy — CALL/PUT directional only. 13 strategies (11 operative + STRAT-06/07 excluded). Based on Bollinger Bands 20-2-0 (50% weight) + SMAs 20/40/100/200 (30% weight) across D1/H1/M15. Primary trading window 09:30–11:30 ET. STRAT-06 and STRAT-07 excluded (require TC2000 Worden Stochastics). STRAT-12/13 'Double Green / CT15' is the most-used daily strategy — fires at open, price must be INSIDE bands M15, gap breaks trendline+midpoint simultaneously. 3 entry windows: V1=1st M15 candle (strongest), V2=Double Green 2nd candle, V3=BB opens before band. STRAT-08/09 superseded by STRAT-12/13."
+  "notes": "Options strategy — CALL/PUT directional only. Fuente histórica con 13 estrategias preservadas. Operative: STRAT-01, STRAT-02, STRAT-04, STRAT-05, STRAT-08, STRAT-09, STRAT-12 y STRAT-13. Non_operative: STRAT-03, STRAT-06, STRAT-07, STRAT-10 y STRAT-11; permanecen completas y pueden reactivarse cambiando su estado. Double Green es un método de ejecución, no una estrategia adicional. Gestión global obligatoria: +12% / -15%. Activos habilitados: NVDA y TSLA.",
+  "execution_profiles": {
+    "double_green": {
+      "name": "Double Green",
+      "type": "execution_method",
+      "status": "operative",
+      "classification_policy": "SI UNA ENTRADA CUMPLE STRAT-08/09, SE CLASIFICA ÚNICAMENTE CON ESE ID; SALIENDO DE BOLLINGER ES EL MOVIMIENTO SUBYACENTE Y DOUBLE GREEN EL MÉTODO DE EJECUCIÓN.",
+      "evaluation_order": [
+        "STRAT-08",
+        "STRAT-09",
+        "STRAT-13"
+      ],
+      "applies_to": [
+        "STRAT-08",
+        "STRAT-09",
+        "STRAT-13"
+      ],
+      "preferred_entry_windows": [
+        {
+          "id": "DG-W1",
+          "window": "09:30–09:45 ET",
+          "description": "Primera vela M15. Si cumple todos los requisitos específicos de STRAT-08/09, usar exclusivamente ese ID; de lo contrario evaluar STRAT-13."
+        },
+        {
+          "id": "DG-W2",
+          "window": "09:45–10:00 ET",
+          "description": "Segunda vela M15. Evaluar STRAT-13; STRAT-08/09 ya no aplican porque son exclusivas de la primera vela."
+        }
+      ],
+      "outside_preferred_windows": "El movimiento puede seguir calificando como STRAT-13 durante el resto de la sesión regular, pero queda fuera de las ventanas preferidas del método Double Green.",
+      "max_trades_per_day": 1,
+      "profit_target_pct": 12,
+      "stop_loss_pct": 15,
+      "requirements": [
+        "Operar únicamente cuando la estrategia aplicable cumpla el 100% de sus requisitos.",
+        "No duplicar la clasificación de una misma entrada.",
+        "No operar precio expuesto ni perseguir una vela extendida.",
+        "Mantener el enfoque en NVDA o TSLA y en una sola compañía por sesión."
+      ]
+    }
+  }
 }

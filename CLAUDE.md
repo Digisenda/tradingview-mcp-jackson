@@ -1,6 +1,6 @@
 # TradingView MCP — Claude Instructions
 
-68 tools for reading and controlling a live TradingView Desktop chart via CDP (port 9222).
+78 tools for reading and controlling a live TradingView Desktop chart via CDP (port 9222).
 
 ## Decision Tree — Which Tool When
 
@@ -164,7 +164,7 @@ R. trades_get(10)             → retroalimentación: leer últimos trades antes
 - "análisis premarket"
 - "prepara el análisis"
 
-**Watchlist:** AAPL, NVDA, SPY, TSLA, QQQ (fuente de verdad: `rules.json` → `watchlist`)
+**Watchlist:** NVDA, TSLA (fuente de verdad: `rules.json` → `watchlist`)
 
 ### Indicadores del sistema (los únicos que se usan)
 - **Bollinger Bands 20-2-0** → peso 50% del análisis. Indicador primario.
@@ -178,7 +178,7 @@ R. trades_get(10)             → retroalimentación: leer últimos trades antes
 ### Secuencia por ticker
 
 ```
-Para cada ticker en [AAPL, NVDA, SPY, TSLA, QQQ]:
+Para cada ticker en [NVDA, TSLA]:
 
   PASO 0 — Setup
     chart_set_symbol(ticker)
@@ -338,7 +338,7 @@ Para cada ticker en [AAPL, NVDA, SPY, TSLA, QQQ]:
 ### Output del checklist — Briefing de Operaciones
 
 **Regla crítica de output:** Durante los pasos 1–4 Claude recolecta datos en silencio.
-NO generar texto de análisis por paso. Al terminar los 5 tickers → generar UN SOLO briefing consolidado.
+NO generar texto de análisis por paso. Al terminar los 2 tickers → generar UN SOLO briefing consolidado.
 
 #### Modelo de scoring ponderado
 
@@ -353,7 +353,7 @@ Calcular un score 0–100% por ticker/estrategia usando los pesos de la metodolo
 
 Leyenda de condiciones:
 - ✅ = cumplida (vale 1.0)
-- 🔲 = pendiente de apertura — M15, volumen, CT15 (vale 0.5)
+- 🔲 = pendiente de apertura — M15, volumen, Saliendo de Bollinger (vale 0.5)
 - ❌ = no cumplida (vale 0)
 
 **Umbrales de clasificación:**
@@ -362,6 +362,11 @@ Leyenda de condiciones:
 - 🔴 <40% → una línea con razón principal
 
 **Veto FED/Earnings:** NO colapsa a 🔴 automático. Muestra el score técnico real más advertencia ⚠️ visible. El operador decide.
+
+**Nota especial por estrategia:**
+- **STRAT-12 (Estrategia Segundo Salto):** es swing overnight. La entrada ocurre a las **3:55 PM ET del día del primer salto** (no al abrir). En el briefing matutino: si ya se entró ayer, mostrar como "verificar segundo salto en apertura — posición abierta". Si el primer salto ocurrió ayer y falta validar las condiciones, mostrar como 🟡 "verificar hoy a las 3:55 PM ET". Máximo 5% de la cuenta por operación. GTC LIMIT antes de apertura; NO vender MARKET.
+- **STRAT-13 (Saliendo de Bollinger con Volatilidad):** puede calificarse en cualquier momento de la sesión regular. No requiere salto de apertura ni trendline. Si el precio abrió expuesto, puede calificarse más tarde cuando regrese al interior de Bollinger y cumpla todos los requisitos.
+- **Clasificación Double Green:** si una entrada cumple STRAT-08 o STRAT-09 → clasificar ÚNICAMENTE con ese ID. STRAT-13 es el movimiento subyacente; Double Green es el método de ejecución. Orden de evaluación: STRAT-08 → STRAT-09 → STRAT-13.
 
 **Formato del briefing (copiar exactamente esta estructura):**
 
@@ -372,17 +377,13 @@ FED: [OK (próx. DD/MM) / HOY ⚠️]  |  [TICKER ⚠️ EARNINGS DD/MM]
 🟢 87% — TSLA  PUT  [Nombre completo de estrategia]
    ✅ [cond BB 1]     ✅ [cond BB 2]     🔲 [cond BB 3 al abrir]
    ✅ [cond MA 1]     ✅ [cond MA 2]
-   Prima $X.XX–X.XX  |  -25% / +12%
+   Prima $X.XX–X.XX  |  -15% / +12%
 
 🟡 62% — NVDA  CALL  [Nombre completo de estrategia]  ⚠️ EARNINGS DD/MM
    ✅ [cond BB 1]     🔲 [cond BB 2]     ❌ [cond BB 3]
    ✅ [cond MA 1]     🔲 [cond MA 2]
-   Prima $X.XX–X.XX  |  -25% / +12%
+   Prima $X.XX–X.XX  |  -15% / +12%
    ⚠ Vigilar: línea BB Middle D1 ($182.40) — alerta manual si rompe hacia arriba
-
-🔴 SPY  → [razón principal en una línea]
-🔴 QQQ  → [razón principal en una línea]
-🔴 AAPL → [razón principal en una línea]
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
@@ -394,7 +395,7 @@ FED: [OK (próx. DD/MM) / HOY ⚠️]  |  [TICKER ⚠️ EARNINGS DD/MM]
 - FED y Earnings = SIEMPRE en el header
 - Veto activo = repetir ⚠️ en la línea del ticker además del header
 - Prima = rango óptimo según rules.json asset_config para ese ticker
-- Target/Stop = siempre visible. Usar +12% / -25% por defecto
+- Target/Stop = siempre visible. Usar +12% / -15% por defecto (STRAT-12 usa -15% global; ver risk_override en rules.json)
 - Bid/Ask, Trendlines, valores exactos de MAs → van al dashboard HTML, NO al briefing
 - Solo tickers 🟡 llevan la línea "⚠ Vigilar:" (ver sección siguiente). Los 🟢 no la llevan —
   el usuario ya está mirando el chart activamente para ejecutar al abrir.
@@ -440,7 +441,7 @@ riesgo.
 
 ### Paso final — Guardar reporte y líneas
 
-Al terminar el checklist completo de los 5 tickers, llamar en este orden:
+Al terminar el checklist completo de los 2 tickers, llamar en este orden:
 ```
 1. premarket_save(
      content="[reporte completo en markdown]",
@@ -481,7 +482,7 @@ Llamar `trades_get(10)` y analizar los resultados antes de iniciar el análisis 
 Win rate general: X/N (XX%)
 | Ticker | Strat | Lado | Resultado | Modo |
 |--------|-------|------|-----------|------|
-| AAPL   | S-02  | CALL | +12%      | real |
+| NVDA   | S-13  | CALL | +12%      | real |
 ...
 ⚠️ Alertas: [ej. "STRAT-02 PUT: 0/3 esta semana → baja confianza hoy"]
 ✅ Patrones confirmados: [ej. "BB M15 estrecho + gap up → CALL efectivo (2/2)"]
@@ -511,7 +512,7 @@ Si dice "no operé" o no responde → continuar sin registrar.
 - Ventana válida: 9:30–11:30 AM ET únicamente
 - Strike: prima dentro del rango óptimo por ticker (ver rules.json → asset_config)
 - Expiración: más cercana. Corte viernes 11:00 AM ET → siguiente semana si ya pasó
-- Exit: +12% profit GTC / -25% stop loss GTC (bracket inmediato al entrar)
+- Exit: +12% profit GTC / -15% stop loss GTC (bracket inmediato al entrar). STRAT-12: orden GTC LIMIT colocada antes de la apertura del segundo día; nunca vender MARKET.
 
 ## Movimientos en Bloque (#18)
 

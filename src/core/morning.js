@@ -465,27 +465,27 @@ export function generateHtml(briefData, date) {
     const earnBlocked = tickerEarn?.active;
     const fedBlocked  = fundamental_filters?.fed?.active;
 
-    if (earnBlocked || fedBlocked) {
-      const reasons = [];
-      if (earnBlocked) reasons.push(`EARNINGS ${tickerEarn.date}`);
-      if (fedBlocked)  reasons.push("FED activo");
-      bNoOperar.push({ symbol: sym.symbol, reason: reasons.join(" · "), price: sym.quote?.last ?? sym.quote?.close });
-      continue;
-    }
+    // Veto FED/Earnings: NO colapsa a 🔴 automático. Se muestra el score técnico
+    // real con advertencia ⚠️ visible en la línea del ticker — el operador decide.
+    const warnings = [];
+    if (earnBlocked) warnings.push(`EARNINGS ${tickerEarn.date}`);
+    if (fedBlocked)  warnings.push("FED activo");
 
     const cands = sym.strategy_candidates || [];
     const metCands     = cands.filter((c) => c.confidence === "conditions_met");
     const formingCands = cands.filter((c) => c.confidence === "setup_forming");
 
     if (metCands.length > 0) {
-      for (const cand of metCands) bEjecutar.push({ sym, cand });
+      for (const cand of metCands) bEjecutar.push({ sym, cand, warnings });
     } else if (formingCands.length > 0) {
-      for (const cand of formingCands) bVigilar.push({ sym, cand });
+      for (const cand of formingCands) bVigilar.push({ sym, cand, warnings });
     } else {
       const best = cands[0];
+      const reasonParts = [best ? `${best.id} ${best.position} — condiciones no alcanzadas` : "Sin setup identificado"];
+      if (warnings.length) reasonParts.push(warnings.join(" · "));
       bNoOperar.push({
         symbol: sym.symbol,
-        reason: best ? `${best.id} ${best.position} — condiciones no alcanzadas` : "Sin setup identificado",
+        reason: reasonParts.join(" · "),
         price: sym.quote?.last ?? sym.quote?.close,
       });
     }
@@ -562,7 +562,7 @@ export function generateHtml(briefData, date) {
   }
 
   function stratRowHtml(entry, urgency) {
-    const { sym, cand } = entry;
+    const { sym, cand, warnings } = entry;
     const price = sym.quote?.last ?? sym.quote?.close;
     const prima = primaLabel(sym.symbol);
     const posCls  = cand.position === "CALL" ? "text-green-400" : "text-red-400";
@@ -571,6 +571,8 @@ export function generateHtml(briefData, date) {
     const condHtml = buildCondHtml(sym, cand);
     const noteHtml = cand.note
       ? `<div class="text-gray-500 text-xs mt-1 truncate">${esc(cand.note)}</div>` : "";
+    const warnHtml = warnings?.length
+      ? `<span class="text-red-400 text-xs font-bold">⚠️ ${esc(warnings.join(" · "))}</span>` : "";
 
     return `
     <div class="rounded-lg p-3 mb-2 border ${rowBg}" style="background:${rowInner}">
@@ -578,6 +580,7 @@ export function generateHtml(briefData, date) {
         <span class="font-bold text-white text-sm">${esc(sym.symbol)}</span>
         <span class="font-bold ${posCls} text-sm">${esc(cand.position)}</span>
         <span class="text-orange-300 text-xs font-bold bg-orange-900/40 px-1.5 py-0.5 rounded">${esc(cand.id)}</span>
+        ${warnHtml}
         <span class="ml-auto text-xs text-gray-400">Prima: <span class="text-white font-bold">${prima}</span></span>
         <span class="text-red-400 text-xs">Stop <span class="font-bold">−25%</span></span>
         <span class="text-green-400 text-xs">Target <span class="font-bold">+12%</span></span>
@@ -611,7 +614,7 @@ export function generateHtml(briefData, date) {
   <div class="rounded-lg border border-gray-800 mb-4 overflow-hidden" style="background:#080d14">
     ${fundamentalWarnings.length ? `
     <div class="px-4 py-2.5 border-b border-red-900/60" style="background:#1a0505">
-      <div class="text-red-400 font-bold text-xs tracking-wide">⛔ RESTRICCIÓN GLOBAL — NO OPERAR · ${fundamentalWarnings.map((w) => esc(w)).join(" · ")}</div>
+      <div class="text-red-400 font-bold text-xs tracking-wide">⚠️ ADVERTENCIA DEL DÍA · ${fundamentalWarnings.map((w) => esc(w)).join(" · ")}</div>
     </div>` : ""}
 
     <div class="p-4 border-b border-gray-800/60">
