@@ -2,6 +2,7 @@
  * Core data access logic.
  */
 import { evaluate, evaluateAsync, KNOWN_PATHS } from '../connection.js';
+import { waitForChartReady } from '../wait.js';
 
 const MAX_OHLCV_BARS = 500;
 const MAX_TRADES = 20;
@@ -243,6 +244,22 @@ export async function getEquity() {
 }
 
 export async function getQuote({ symbol } = {}) {
+  // BUG FIX 2026-06-23: `symbol` used to only label the result (quote.symbol = sym) while the
+  // actual bars/symbolExt() were read from whatever symbol was already active on the chart —
+  // requesting a different symbol silently returned the wrong ticker's data. Switch the chart
+  // first, same mechanism as setSymbol() in chart.js, so the requested symbol is what's read.
+  if (symbol) {
+    await evaluateAsync(`
+      (function() {
+        var chart = ${CHART_API};
+        return new Promise(function(resolve) {
+          chart.setSymbol('${symbol.replace(/'/g, "\\'")}', {});
+          setTimeout(resolve, 500);
+        });
+      })()
+    `);
+    await waitForChartReady(symbol);
+  }
   const data = await evaluate(`
     (function() {
       var api = ${CHART_API};

@@ -7,7 +7,9 @@
  * Storage: bucket 'screenshots' — archivos PNG
  */
 import { createClient } from "@supabase/supabase-js";
-import { readFileSync } from "node:fs";
+import { readFileSync, mkdirSync, appendFileSync } from "node:fs";
+import { join } from "node:path";
+import { weekDirFor, mondayOfWeek } from "./paths.js";
 
 // ─── Cliente ─────────────────────────────────────────────────────────────────
 
@@ -155,14 +157,41 @@ export async function getSignalsForDate(date) {
 // ─── Trades ───────────────────────────────────────────────────────────────────
 
 /**
- * Inserta un trade en la tabla trades.
+ * Respaldo local del trade en ANALISIS-PREMERCADO\semana-YYYY-MM-DD\trades-semana-YYYY-MM-DD.jsonl
+ * (JSON Lines, append-only — un archivo por semana, mismo patrón que PROGRESO.txt).
+ * Hallazgo 2026-06-23: hasta ahora el único registro de los campos estructurados de un trade
+ * (strategy, premium_entry/exit, bb_widths, gap_direction) vivía SOLO en Supabase/Neon — si la
+ * BD fallaba (pausado recurrente, ver Backlog #3 en PLAN_MAESTRO), el trade se perdía sin dejar
+ * rastro en disco. Este respaldo corre SIEMPRE, antes de intentar la BD, independiente de si esa
+ * llamada tiene éxito o no.
+ * @param {object} trade
+ * @returns {{ backed_up: boolean, path?: string, error?: string }}
+ */
+function appendTradeBackup(trade) {
+  try {
+    const dateStr = trade.date || new Date().toISOString().split("T")[0];
+    const dir = weekDirFor(dateStr);
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, `trades-semana-${mondayOfWeek(dateStr)}.jsonl`);
+    appendFileSync(file, JSON.stringify({ ...trade, backed_up_at: new Date().toISOString() }) + "\n", "utf8");
+    return { backed_up: true, path: file };
+  } catch (err) {
+    return { backed_up: false, error: err.message };
+  }
+}
+
+/**
+ * Inserta un trade en la tabla trades. Siempre escribe el respaldo local primero (ver
+ * appendTradeBackup) — el resultado reporta ambos outcomes, BD y respaldo local, por separado.
  * Acepta campos nuevos: signal_id, status, entry_date, exit_date.
  * @param {object} trade
- * @returns {{ saved: boolean, id?: string, error?: string }}
+ * @returns {{ saved: boolean, id?: string, error?: string, local_backup: object }}
  */
 export async function saveTrade(trade = {}) {
+  const local_backup = appendTradeBackup(trade);
+
   const sb = getClient();
-  if (!sb) return { saved: false, reason: "supabase_not_configured" };
+  if (!sb) return { saved: false, reason: "supabase_not_configured", local_backup };
 
   try {
     const { data, error } = await sb
@@ -172,9 +201,9 @@ export async function saveTrade(trade = {}) {
       .single();
 
     if (error) throw error;
-    return { saved: true, id: data.id };
+    return { saved: true, id: data.id, local_backup };
   } catch (err) {
-    return { saved: false, error: err.message };
+    return { saved: false, error: err.message, local_backup };
   }
 }
 

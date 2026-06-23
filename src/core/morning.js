@@ -13,6 +13,7 @@ import * as data from "./data.js";
 import { checkFundamentals } from "./fundamental.js";
 import { savePremarketSession, saveSignals } from "./supabase.js";
 import { removeOne } from "./drawing.js";
+import { weekDirFor } from "./paths.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, "../../");
@@ -175,9 +176,14 @@ function screenStrategies(price, tfData) {
     });
   }
 
-  // STRAT-12/13 — Double Green CT15 (Cambio de Tendencia M15)
+  // STRAT-08/09 — Double Green CT15 (Cambio de Tendencia M15)
   // Pre-condiciones verificables en premarket; trigger + confirmación solo al abrir (9:30 ET)
-  // STRAT-12 = CALL | STRAT-13 = PUT
+  // STRAT-08 = CALL | STRAT-09 = PUT
+  // FIX 2026-06-23: estos candidates usaban "STRAT-12"/"STRAT-13" — números que rules.json
+  // reasignó a Segundo Salto / Saliendo de Bollinger con Volatilidad el 2026-06-16. Esta lógica
+  // siempre evaluó las condiciones reales de STRAT-08/09 (precondición M15 bajista/alcista +
+  // trendline + gap+PM simultáneo + BB abre) — nunca las de Segundo Salto. rules.json es el
+  // documento maestro; el id debe coincidir con lo que ahí dice, no con la numeración vieja.
   const h1BearishCtx = h1BBPos === "below_middle" || h1MAOrd === "bajista" || h1MAOrd === "mixto_bajista";
   const h1BullishCtx = h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista";
   const d1BearishCtx = d1BBPos === "below_middle" || d1MAOrd === "bajista" || d1MAOrd === "mixto_bajista";
@@ -195,13 +201,13 @@ function screenStrategies(price, tfData) {
     if (h1BearishCtx)  confirmed.push("H1 bajista");            else pending.push("H1 bajista");
     pending.push("trendline M15 trazada", "gap up rompe PM+trendline al abrir", "BB abre 1ª~3ª vela M15");
     candidates.push({
-      id: "STRAT-12", position: "CALL",
+      id: "STRAT-08", position: "CALL",
       confidence: (m15BelowMid && (d1BearishCtx || h1BearishCtx)) ? "setup_forming" : "watch",
       note: `CT15 CALL: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
     });
   }
 
-  // STRAT-13 PUT: precio M15 sobre PM (o en PM) y dentro de BB — contexto D1/H1 alcista
+  // STRAT-09 PUT: precio M15 sobre PM (o en PM) y dentro de BB — contexto D1/H1 alcista
   if (m15InsideBands && !m15BelowMid) {
     const confirmed = [];
     const pending   = [];
@@ -210,7 +216,7 @@ function screenStrategies(price, tfData) {
     if (h1BullishCtx)  confirmed.push("H1 alcista");             else pending.push("H1 alcista");
     pending.push("trendline M15 trazada", "gap down rompe PM+trendline al abrir", "BB abre 1ª~3ª vela M15");
     candidates.push({
-      id: "STRAT-13", position: "PUT",
+      id: "STRAT-09", position: "PUT",
       confidence: (m15AboveMid && (d1BullishCtx || h1BullishCtx)) ? "setup_forming" : "watch",
       note: `CT15 PUT: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
     });
@@ -343,7 +349,7 @@ export async function runBrief({ rules_path } = {}) {
       "PASO 6 — Bid/Ask: recordar verificar spread antes de entrar.",
       "PASO 7 — Premarket: usar quote.last para precio. Estimar gap up/down/flat.",
       "ESTRATEGIAS: Reportar strategy_candidates con confidence='conditions_met' primero, luego 'setup_forming', luego 'watch'.",
-      "STRAT-12/13 CT15: si aparece en candidates, advertir que trigger y confirmaciones son SOLO verificables al abrir (9:30 ET) — en vivo: gap up/down rompe PM+trendline M15 SIMULTÁNEAMENTE + BB abre. Sin gap = estrategia cancelada. Si precio abre expuesto (fuera de banda) → pasar a STRAT-04/05, no CT15.",
+      "STRAT-08/09 CT15: si aparece en candidates, advertir que trigger y confirmaciones son SOLO verificables al abrir (9:30 ET) — en vivo: gap up/down rompe PM+trendline M15 SIMULTÁNEAMENTE + BB abre. Sin gap = estrategia cancelada. Si precio abre expuesto (fuera de banda) → pasar a STRAT-04/05, no CT15. NOTA: STRAT-12/13 son Segundo Salto / Saliendo de Bollinger con Volatilidad — estrategias distintas, no relacionadas con CT15 (ver rules.json).",
       "CT15 VENTANAS de entrada (orden de potencia): V1=1ª vela M15 BB abre inmediatamente (más potente) · V2=Double Green 2ª vela cierra sobre cierre anterior · V3=BB abre ANTES de llegar al disipador. Entrar en la primera ventana que se confirme.",
       "OUTPUT: Bloque estructurado por ticker + tabla resumen con bias global y estrategias prioritarias al final.",
     ].join(" "),
@@ -499,7 +505,7 @@ export function generateHtml(briefData, date) {
     const pos = cand.position; // "CALL" | "PUT"
     const items = [];
 
-    if (cand.id === "STRAT-12" || cand.id === "STRAT-13") {
+    if (cand.id === "STRAT-08" || cand.id === "STRAT-09") {
       // PC-003: precio dentro de BB M15 (no expuesto)
       const m15Pos = m15.bb_position;
       const m15Inside = m15Pos != null && !["above_upper", "below_lower"].includes(m15Pos);
@@ -1330,7 +1336,7 @@ export async function savePremarketReport({ content, date, brief_data } = {}) {
   const dateStr = date || new Date().toISOString().split("T")[0];
   assertSafeDate(dateStr);
 
-  const sessionsDir = join(PROJECT_ROOT, "docs", "sessions");
+  const sessionsDir = weekDirFor(dateStr);
   mkdirSync(sessionsDir, { recursive: true });
 
   const mdPath = join(sessionsDir, `premarket-${dateStr}.md`);

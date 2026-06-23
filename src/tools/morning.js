@@ -93,7 +93,7 @@ export function registerMorningTools(server) {
 
   server.tool(
     "trade_save",
-    "Save a trade to Supabase. Call after closing a position to record the result for statistical feedback.",
+    "Save a trade to Supabase, and always to a local JSONL backup in ANALISIS-PREMERCADO\\semana-YYYY-MM-DD\\ (so the trade is never lost if Supabase/Neon is down). Call after closing a position to record the result for statistical feedback.",
     {
       ticker:        z.string().describe("Ticker symbol, e.g. AAPL"),
       strategy:      z.string().describe("Strategy ID, e.g. STRAT-02"),
