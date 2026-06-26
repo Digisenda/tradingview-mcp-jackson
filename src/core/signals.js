@@ -68,7 +68,7 @@ export function maOrder(price, smas) {
  * @returns {{ id, position, confidence, note }[]}
  */
 export function screenStrategies(price, tfData) {
-  if (!price) return [];
+  if (price == null) return [];
   const candidates = [];
   const d1 = tfData.D1 || {};
   const h1 = tfData.H1 || {};

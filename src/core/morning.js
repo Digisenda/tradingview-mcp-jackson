@@ -2,7 +2,7 @@
  * Morning brief core logic.
  * Scans watchlist across D1, H1 and M15 timeframes.
  * Returns structured multi-TF data + strategy candidates for Claude to apply
- * the full 7-step premarket checklist.
+ * the 6-step premarket checklist (PASO 0–6).
  */
 import { readFileSync, writeFileSync, mkdirSync, existsSync, unlinkSync } from "node:fs";
 import { homedir } from "node:os";
@@ -179,16 +179,16 @@ export async function runBrief({ rules_path } = {}) {
     },
     symbols_scanned: results,
     instruction: [
-      "ANÁLISIS PREMARKET — Aplica el checklist de 7 pasos por ticker usando los datos multi-timeframe.",
+      "ANÁLISIS PREMARKET — Aplica el checklist de 6 pasos (PASO 0–6) por ticker usando los datos multi-timeframe.",
       "FILTROS FUNDAMENTALES (verificar PRIMERO): Si fundamental_filters.fed.active=true → advertir NO operar hoy. Si fundamental_filters.earnings[ticker].active=true → advertir NO operar ese ticker. Mostrar fundamental_filters.warnings al inicio del reporte si hay alguno activo.",
       "REGLA CRÍTICA: BB es el indicador primario (50% peso). Si bb.width es muy estrecho en todos los TF = baja volatilidad = NO operar ese día.",
-      "PASO 1 — BB D1: bb_position='above_middle' → Middle=PISO | 'below_middle' → Middle=TECHO. Anotar nivel bb.basis.",
-      "PASO 2 — BB H1: evaluar bb_position H1. Middle H1 = punto de rebote intraday. Anotar si es techo o piso.",
-      "PASO 3 — MAs D1 (peso 30%): usar ma_order para tendencia. MAs a favor tendencia = rebotes. MAs en contra = continuación.",
-      "PASO 4 — MAs H1: tendencia corto plazo, rebote más cercano, indicar máx/mín reciente (requiere data_get_ohlcv en H1).",
-      "PASO 5 — Trendlines: indicar al usuario trazar manualmente en gráfico BB H1.",
-      "PASO 6 — Bid/Ask: recordar verificar spread antes de entrar.",
-      "PASO 7 — Premarket: usar quote.last para precio. Estimar gap up/down/flat.",
+      "PASO 0 — Setup + chequeo volatilidad: Si bb.width estrecho en D1 Y H1 Y M15 (los 3) → plantilla 'sin condiciones operativas', saltar PASO 1-4.",
+      "PASO 1 — BB Diario: clasificación y nivel [peso 50%]: bb_position='above_middle' → Middle=PISO | 'below_middle' → Middle=TECHO. Entregar nivel bb.basis en briefing.",
+      "PASO 2 — BB M15: pendiente y proyección: chart_set_timeframe('15') + data_get_ohlcv(count:3) → calcular pendiente upper/lower. Entregar proyección cualitativa en briefing (sin draw_shape).",
+      "PASO 3 — BB H1 + MAs H1 + H-Lines [peso 50% BB / 30% MAs]: chart_set_timeframe('60') + data_get_ohlcv(count:100) → H-Max y H-Min. Anotar máx. 2 MAs más cercanas al precio (sin draw_shape).",
+      "PASO 4 — MAs D1 [peso 30%]: usar smas de timeframes.D1. Anotar máx. 2 MAs en briefing.",
+      "PASO 5 — Trendline calculada + captura: desde barras OHLCV ya obtenidas (PASO 2=M15, PASO 3=H1), identificar 2-3 máximos/mínimos relevantes, ajustar línea entre 2 puntos representativos. capture_screenshot(region:'chart'). Marcar resultado: rota ✅ / no rota ❌ / sin tick 🔲.",
+      "PASO 6 — Precio fresco + gap: quote_get(symbol) → verificar que time sea de HOY (Guard premercado obsoleto). Si SÍ: gap up/down/flat + comparar contra trendline PASO 5 → condiciones ✅/❌. Si NO (dato de ayer): marcar 'sin tick premercado'.",
       "ESTRATEGIAS: Reportar strategy_candidates con confidence='conditions_met' primero, luego 'setup_forming', luego 'watch'.",
       "STRAT-08/09 CT15: si aparece en candidates, advertir que trigger y confirmaciones son SOLO verificables al abrir (9:30 ET) — en vivo: gap up/down rompe PM+trendline M15 SIMULTÁNEAMENTE + BB abre. Sin gap = estrategia cancelada. Si precio abre expuesto (fuera de banda) → pasar a STRAT-04/05, no CT15. NOTA: STRAT-12/13 son Segundo Salto / Saliendo de Bollinger con Volatilidad — estrategias distintas, no relacionadas con CT15 (ver rules.json).",
       "CT15 VENTANAS de entrada (orden de potencia): V1=1ª vela M15 BB abre inmediatamente (más potente) · V2=Double Green 2ª vela cierra sobre cierre anterior · V3=BB abre ANTES de llegar al disipador. Entrar en la primera ventana que se confirme.",

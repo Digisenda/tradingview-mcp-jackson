@@ -14,10 +14,9 @@
 
 import "dotenv/config";
 import { readFileSync, existsSync, appendFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname } from "node:path";
 
 import * as chart from "./src/core/chart.js";
 import * as data from "./src/core/data.js";
@@ -42,6 +41,17 @@ const RULES_PATH = rulesFlag ? rulesFlag.split("=")[1] : null;
 // ─── Config / rules ───────────────────────────────────────────────────────────
 
 function loadRules() {
+  if (RULES_PATH) {
+    const resolved = resolve(RULES_PATH);
+    const safeProject = resolve(__dirname);
+    const safeUser = resolve(homedir(), ".tradingview-mcp");
+    const underProject = resolved === safeProject || resolved.startsWith(safeProject + sep);
+    const underUser = resolved === safeUser || resolved.startsWith(safeUser + sep);
+    if (!underProject && !underUser) {
+      throw new Error(`--rules path fuera del directorio permitido: ${resolved}`);
+    }
+  }
+
   const candidates = [
     RULES_PATH,
     join(__dirname, "rules.json"),
@@ -73,7 +83,8 @@ function isInSessionWindow(sessionStr) {
   if (!match) return true;
   const start = parseInt(match[1]) * 60 + parseInt(match[2]);
   const end = parseInt(match[3]) * 60 + parseInt(match[4]);
-  return nowHM() >= start && nowHM() <= end;
+  const hm = nowHM();
+  return hm >= start && hm <= end;
 }
 
 function todayET() {
@@ -85,7 +96,7 @@ function todayET() {
 // ─── FED/Earnings veto check ──────────────────────────────────────────────────
 
 function buildVetoFlags(rules, ticker) {
-  const today = todayET();
+  const today = new Date().toISOString().split("T")[0]; // UTC, consistent with fundamental.js
   const flags = [];
 
   for (const fd of rules.fundamental_filters?.fed_dates || []) {
@@ -114,44 +125,44 @@ async function scanSymbol(symbol) {
   let quoteData = null;
   const tfData = {};
 
-  // Save chart state to restore after scan
   const origState = await chart.getState().catch(() => null);
 
-  await chart.setSymbol({ symbol });
-  await new Promise((r) => setTimeout(r, 900));
+  try {
+    await chart.setSymbol({ symbol });
+    await new Promise((r) => setTimeout(r, 900));
 
-  for (const { key, tf } of TIMEFRAMES) {
-    try {
-      await chart.setTimeframe({ timeframe: tf });
-      await new Promise((r) => setTimeout(r, 800));
+    for (const { key, tf } of TIMEFRAMES) {
+      try {
+        await chart.setTimeframe({ timeframe: tf });
+        await new Promise((r) => setTimeout(r, 800));
 
-      const [indicators, quote] = await Promise.all([
-        data.getStudyValues(),
-        quoteData == null ? data.getQuote({}) : Promise.resolve(null),
-      ]);
+        const [indicators, quote] = await Promise.all([
+          data.getStudyValues(),
+          quoteData == null ? data.getQuote({}) : Promise.resolve(null),
+        ]);
 
-      if (quote?.success) quoteData = quote;
+        if (quote?.success) quoteData = quote;
 
-      const price = quoteData?.last ?? quoteData?.close ?? null;
-      const bb = extractBB(indicators);
-      const smas = extractSMAs(indicators);
+        const price = quoteData?.last ?? quoteData?.close ?? null;
+        const bb = extractBB(indicators);
+        const smas = extractSMAs(indicators);
 
-      tfData[key] = {
-        bb,
-        smas,
-        bb_position: bb ? bbPosition(price, bb) : "no_bb_detected",
-        ma_order: smas.length >= 4 ? maOrder(price, smas) : "insufficient_data",
-      };
-    } catch (err) {
-      tfData[key] = { error: err.message };
+        tfData[key] = {
+          bb,
+          smas,
+          bb_position: bb ? bbPosition(price, bb) : "no_bb_detected",
+          ma_order: smas.length >= 4 ? maOrder(price, smas) : "insufficient_data",
+        };
+      } catch (err) {
+        tfData[key] = { error: err.message };
+      }
     }
-  }
-
-  // Restore original chart (best-effort — don't fail if TV was closed)
-  if (origState?.symbol) {
-    await chart.setSymbol({ symbol: origState.symbol }).catch(() => {});
-    if (origState?.resolution) {
-      await chart.setTimeframe({ timeframe: origState.resolution }).catch(() => {});
+  } finally {
+    if (origState?.symbol) {
+      await chart.setSymbol({ symbol: origState.symbol }).catch(() => {});
+      if (origState?.resolution) {
+        await chart.setTimeframe({ timeframe: origState.resolution }).catch(() => {});
+      }
     }
   }
 
@@ -254,9 +265,13 @@ const firedSignals = new Map(); // key → last confidence rank fired
 const CONFIDENCE_RANK = { watch: 0, setup_forming: 1, conditions_met: 2 };
 
 function shouldFire(symbol, cand) {
+  if (!(cand.confidence in CONFIDENCE_RANK)) {
+    console.warn(`[VIGIA] ⚠️ Confidence desconocida: "${cand.confidence}" (${symbol}/${cand.id}) — señal ignorada`);
+    return false;
+  }
   const key = `${symbol}:${cand.id}:${cand.position}`;
   const prevRank = firedSignals.has(key) ? (CONFIDENCE_RANK[firedSignals.get(key)] ?? -1) : -1;
-  return (CONFIDENCE_RANK[cand.confidence] ?? 0) > prevRank;
+  return CONFIDENCE_RANK[cand.confidence] > prevRank;
 }
 
 function markFired(symbol, cand) {
@@ -268,11 +283,21 @@ function markFired(symbol, cand) {
 // tfData cache — refreshed every REFRESH_EVERY ticks (≈ every 5 min at 30s interval)
 const tfCache = new Map();
 let tickCount = 0;
+let lastTickDay = null;
 const REFRESH_EVERY = 10;
 const TICK_MS = 30_000;
 
 async function tick(rules) {
   const { watchlist = [], session = {} } = rules;
+
+  const today = todayET();
+  if (lastTickDay && lastTickDay !== today) {
+    firedSignals.clear();
+    tfCache.clear();
+    tickCount = 0;
+    console.log(`\n[VIGIA] 📅 Nuevo día (${today}) — estado reiniciado`);
+  }
+  lastTickDay = today;
 
   if (!isInSessionWindow(session.primary_window)) {
     process.stdout.write(".");
@@ -293,8 +318,12 @@ async function tick(rules) {
         tfData = scan.tfData;
         tfCache.set(symbol, tfData);
       } else {
-        // Fast path: fetch only the current quote, reuse cached tfData
+        // getQuote({ symbol }) switches chart internally — save and restore.
+        const origFast = await chart.getState().catch(() => null);
         const q = await data.getQuote({ symbol }).catch(() => null);
+        if (origFast?.symbol && origFast.symbol !== symbol) {
+          await chart.setSymbol({ symbol: origFast.symbol }).catch(() => {});
+        }
         price = q?.last ?? q?.close ?? null;
         tfData = tfCache.get(symbol);
       }
