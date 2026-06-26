@@ -20,7 +20,6 @@ import { fileURLToPath } from "node:url";
 
 import * as chart from "./src/core/chart.js";
 import * as data from "./src/core/data.js";
-import * as alerts from "./src/core/alerts.js";
 import {
   extractBB,
   extractSMAs,
@@ -190,6 +189,22 @@ function logSignal(entry) {
   }
 }
 
+// ─── Toast notification (node-notifier — npm install node-notifier) ──────────
+
+async function sendToast(title, body) {
+  try {
+    const { default: notifier } = await import("node-notifier");
+    notifier.notify({ title, message: body, sound: true, wait: false });
+    console.log(`[VIGIA] 🔔 Toast enviado`);
+  } catch (e) {
+    if (e.code === "ERR_MODULE_NOT_FOUND") {
+      console.warn("[VIGIA] ℹ️  Toast omitido — instala: npm install node-notifier");
+    } else {
+      console.warn("[VIGIA] ⚠️ Toast falló:", e.message);
+    }
+  }
+}
+
 // ─── Email (optional — configure NODEMAILER_* in .env) ───────────────────────
 
 async function sendEmail(subject, body) {
@@ -236,15 +251,14 @@ async function fireAlert(symbol, candidate, price, vetoFlags) {
   });
 
   if (DRY_RUN) {
-    console.log("        [dry-run] — sin alerta nativa ni email");
+    console.log("        [dry-run] — sin toast ni email");
     return;
   }
 
-  if (price != null) {
-    await alerts.create({ price, message: msg }).catch((e) =>
-      console.warn("[VIGIA] ⚠️ alert_create falló:", e.message)
-    );
-  }
+  await sendToast(
+    `[VIGIA] ${candidate.id} ${candidate.position} ${symbol}`,
+    `@$${price?.toFixed(2) ?? "?"} · ${candidate.note.slice(0, 100)}`
+  );
 
   await sendEmail(
     `[VIGIA] ${candidate.id} ${candidate.position} ${symbol}`,
