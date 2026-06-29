@@ -13,7 +13,7 @@
  */
 
 import "dotenv/config";
-import { readFileSync, existsSync, appendFileSync, mkdirSync } from "node:fs";
+import { readFileSync, existsSync, appendFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join, dirname, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -189,6 +189,92 @@ function logSignal(entry) {
   }
 }
 
+// ─── Dashboard HTML ───────────────────────────────────────────────────────────
+
+function signalHtmlPath(date) {
+  return join(homedir(), ".tradingview-mcp", `signals-${date}.html`);
+}
+
+function updateSignalsHtml() {
+  const date = todayET();
+  const jsonlPath = signalLogPath();
+  const htmlPath  = signalHtmlPath(date);
+
+  const entries = [];
+  if (existsSync(jsonlPath)) {
+    for (const line of readFileSync(jsonlPath, "utf8").split("\n")) {
+      if (!line.trim()) continue;
+      try { entries.push(JSON.parse(line)); } catch {}
+    }
+  }
+
+  const now = new Date().toLocaleString("en-US", {
+    timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: true,
+  });
+
+  const rows = entries.map((e) => {
+    const time = new Date(e.logged_at).toLocaleString("en-US", {
+      timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+    });
+    const conf  = e.confidence || "";
+    const side  = e.position || e.side || "";
+    const veto  = e.veto_flags?.length ? ` ⚠️ ${e.veto_flags.join(" · ")}` : "";
+    const mode  = e.dry_run ? '<span style="opacity:.5">dry-run</span>' : '<span style="color:#00ff88">REAL</span>';
+    return `<tr class="${e.dry_run ? "dry" : ""}">
+      <td>${time}</td>
+      <td><b>${e.ticker}</b></td>
+      <td>${e.strategy}</td>
+      <td class="${side}">${side}</td>
+      <td class="${conf}">${conf}</td>
+      <td>$${e.price?.toFixed(2) ?? "?"}</td>
+      <td style="font-size:.85em;max-width:420px">${e.note}${veto}</td>
+      <td>${mode}</td>
+    </tr>`;
+  }).join("\n");
+
+  const html = `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="30">
+  <title>Vigía — ${date}</title>
+  <style>
+    body{font-family:monospace;background:#0d0d0d;color:#e0e0e0;padding:20px;margin:0}
+    h1{color:#00d4ff;margin:0 0 4px}
+    p{color:#666;margin:0 0 16px;font-size:.85em}
+    table{border-collapse:collapse;width:100%}
+    th{background:#1a1a2e;color:#00d4ff;padding:8px 12px;text-align:left;font-size:.85em}
+    td{padding:6px 12px;border-bottom:1px solid #1a1a1a;font-size:.85em}
+    tr:hover td{background:#111}
+    .conditions_met{color:#00ff88;font-weight:bold}
+    .setup_forming{color:#ffd700}
+    .watch{color:#888}
+    .CALL{color:#00ff88;font-weight:bold}
+    .PUT{color:#ff4444;font-weight:bold}
+    .dry td{opacity:.5}
+  </style>
+</head>
+<body>
+  <h1>📡 Vigía — Señales ${date}</h1>
+  <p>Actualizado: ${now} ET · auto-refresh 30 s · ${entries.length} señal(es)</p>
+  <table>
+    <thead><tr>
+      <th>Hora ET</th><th>Ticker</th><th>Estrategia</th><th>Lado</th>
+      <th>Confianza</th><th>Precio</th><th>Nota</th><th>Modo</th>
+    </tr></thead>
+    <tbody>${rows || '<tr><td colspan="8" style="color:#555;text-align:center;padding:24px">Sin señales aún</td></tr>'}</tbody>
+  </table>
+</body>
+</html>`;
+
+  try {
+    writeFileSync(htmlPath, html, "utf8");
+  } catch (e) {
+    console.warn("[VIGIA] ⚠️ No se pudo escribir dashboard HTML:", e.message);
+  }
+  return htmlPath;
+}
+
 // ─── Toast notification (node-notifier — npm install node-notifier) ──────────
 
 async function sendToast(title, body) {
@@ -208,10 +294,10 @@ async function sendToast(title, body) {
 // ─── Email (optional — configure NODEMAILER_* in .env) ───────────────────────
 
 async function sendEmail(subject, body) {
-  const host = process.env.NODEMAILER_HOST;
-  const user = process.env.NODEMAILER_USER;
-  const pass = process.env.NODEMAILER_PASS;
-  const to   = process.env.NODEMAILER_TO;
+  const host = (process.env.NODEMAILER_HOST || "").trim();
+  const user = (process.env.NODEMAILER_USER || "").trim();
+  const pass = (process.env.NODEMAILER_PASS || "").replace(/\s+/g, ""); // App Passwords: strip spaces
+  const to   = (process.env.NODEMAILER_TO   || "").trim();
   if (!host || !user || !pass || !to) return;
 
   try {
@@ -249,6 +335,9 @@ async function fireAlert(symbol, candidate, price, vetoFlags) {
     veto_flags: vetoFlags,
     dry_run: DRY_RUN,
   });
+
+  const htmlPath = updateSignalsHtml();
+  console.log(`        📊 Dashboard: ${htmlPath}`);
 
   if (DRY_RUN) {
     console.log("        [dry-run] — sin toast ni email");
@@ -372,6 +461,8 @@ async function main() {
   console.log(`  Watchlist : ${(rules.watchlist || []).join(", ")}`);
   console.log(`  Ventana   : ${rules.session?.primary_window || "09:30-11:30 ET"}`);
   console.log(`  Log JSONL : ${signalLogPath()}`);
+  const htmlPath = updateSignalsHtml();
+  console.log(`  Dashboard : ${htmlPath}`);
   console.log("  Ctrl+C para detener\n");
 
   // First tick immediately (forces full scan)
