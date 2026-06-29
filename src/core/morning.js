@@ -540,104 +540,7 @@ export function generateHtml(briefData, date) {
     <div id="schwab-extracted" class="hidden mt-3 rounded p-3 border border-green-900/50 text-xs" style="background:#071a07">
       <div class="text-green-400 font-bold mb-2">✓ Campos extraídos — revisa y confirma</div>
       <div id="schwab-extracted-fields" class="grid grid-cols-4 gap-2 text-gray-300 mb-3"></div>
-      <button onclick="fillFormFromSchwab()"
-        class="w-full py-1.5 rounded text-xs font-bold text-white hover:opacity-90 transition"
-        style="background:#16a34a">
-        ↓ Rellenar formulario con estos datos
-      </button>
     </div>
-  </div>
-
-  <!-- LOG TRADE -->
-  <div class="rounded-lg p-4 border border-gray-800" style="background:#111827">
-    <div class="text-gray-400 text-sm font-bold mb-3">📝 LOG TRADE</div>
-    <form id="trade-form" onsubmit="submitTrade(event)">
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">TICKER</label>
-          <select id="t-ticker" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-            ${symbols_scanned.map(s => `<option value="${s.symbol}">${s.symbol}</option>`).join("")}
-          </select>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">SEÑAL / ESTRATEGIA</label>
-          <select id="t-strategy" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-            <option value="">— seleccionar —</option>
-            <option>STRAT-01</option><option>STRAT-02</option><option>STRAT-03</option>
-            <option>STRAT-04</option><option>STRAT-05</option><option>STRAT-08</option>
-            <option>STRAT-09</option><option>STRAT-10</option><option>STRAT-11</option>
-            <option>STRAT-12</option><option>STRAT-13</option>
-          </select>
-          <input type="hidden" id="t-signal-code" value="">
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">LADO</label>
-          <select id="t-side" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-            <option value="CALL">CALL</option><option value="PUT">PUT</option>
-          </select>
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">MODO</label>
-          <select id="t-mode" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-            <option value="paper">PAPER</option><option value="real">REAL</option>
-          </select>
-        </div>
-      </div>
-      <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-3">
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">STRIKE</label>
-          <input id="t-strike" type="number" step="0.5" placeholder="0.00" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">EXPIRACIÓN</label>
-          <input id="t-expiry" type="date" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">PRIMA ENTRADA</label>
-          <input id="t-entry" type="number" step="0.01" placeholder="0.00" oninput="calcResult()" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">PRIMA SALIDA</label>
-          <input id="t-exit" type="number" step="0.01" placeholder="0.00" oninput="calcResult()" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-        </div>
-        <div>
-          <label class="text-xs text-gray-500 block mb-1">CONTRATOS</label>
-          <input id="t-contracts" type="number" value="1" min="1" class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-        </div>
-      </div>
-      <div class="grid grid-cols-3 gap-3 mb-3">
-        <div class="rounded p-2 text-center border border-gray-700" style="background:#1f2937">
-          <div class="text-xs text-gray-400 mb-1">RESULTADO %</div>
-          <div id="t-result-display" class="font-bold text-lg text-gray-400">—</div>
-        </div>
-        <div class="col-span-2">
-          <label class="text-xs text-gray-500 block mb-1">NOTAS</label>
-          <input id="t-notes" type="text" placeholder="Contexto, setup, condiciones..." class="w-full rounded px-2 py-1.5 text-white text-sm border border-gray-700 focus:outline-none" style="background:#1f2937">
-        </div>
-      </div>
-      <button type="submit" class="w-full rounded py-2 text-sm font-bold text-white hover:opacity-90 transition" style="background:#2563eb">
-        GUARDAR TRADE
-      </button>
-    </form>
-    <div id="trade-msg" class="text-xs mt-2 text-center hidden"></div>
-  </div>
-
-  <!-- POSICIONES ABIERTAS -->
-  <div id="open-positions-section" class="rounded-lg p-4 border border-yellow-900/40 mb-3" style="background:#111822">
-    <div class="flex justify-between items-center mb-3">
-      <div class="text-yellow-400 text-sm font-bold">🟡 POSICIONES ABIERTAS</div>
-      <button onclick="loadOpenPositions()" class="text-xs text-yellow-500 hover:text-yellow-300">↻ Actualizar</button>
-    </div>
-    <div id="open-positions-body" class="text-xs text-gray-500">Cargando...</div>
-  </div>
-
-  <!-- HISTORIAL RECIENTE -->
-  <div class="rounded-lg p-4 border border-gray-800" style="background:#111827">
-    <div class="flex justify-between items-center mb-3">
-      <div class="text-gray-400 text-sm font-bold">📊 HISTORIAL RECIENTE</div>
-      <button onclick="loadTrades()" class="text-xs text-blue-400 hover:text-blue-300">↻ Recargar</button>
-    </div>
-    <div id="trades-table" class="text-xs text-gray-500">Cargando...</div>
   </div>
 
   <!-- CALCULADORA BID/ASK -->
@@ -743,207 +646,6 @@ export function generateHtml(briefData, date) {
     document.getElementById('inversion').textContent  = f(inv);
   }
 
-  // ── Supabase trades ──────────────────────────────────────────────────────────
-  var SB_URL = 'https://iunxftxvazpfwqtygzcu.supabase.co';
-  var SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml1bnhmdHh2YXpwZndxdHlnemN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTI4MjgsImV4cCI6MjA5NTE4ODgyOH0.6Gmf-JIwHnLQwXNfjsFwogHXiRXdPxgP7vhVtvDK1ac';
-
-  function sbHeaders() {
-    return { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY };
-  }
-
-  function calcResult() {
-    var entry = parseFloat(document.getElementById('t-entry').value);
-    var exit  = parseFloat(document.getElementById('t-exit').value);
-    var el    = document.getElementById('t-result-display');
-    if (!entry || !exit || entry <= 0) { el.textContent = '—'; el.className = 'font-bold text-lg text-gray-400'; return; }
-    var pct = ((exit - entry) / entry) * 100;
-    el.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
-    el.className = 'font-bold text-lg ' + (pct >= 0 ? 'text-green-400' : 'text-red-400');
-  }
-
-  async function submitTrade(e) {
-    e.preventDefault();
-    var msg = document.getElementById('trade-msg');
-    var entry      = parseFloat(document.getElementById('t-entry').value) || null;
-    var exitVal    = parseFloat(document.getElementById('t-exit').value)  || null;
-    var resultPct  = (entry && exitVal && entry > 0)
-                     ? parseFloat(((exitVal - entry) / entry * 100).toFixed(2)) : null;
-    var signalCode = document.getElementById('t-signal-code').value || null;
-
-    // Tomar entry_date/exit_date de _schwabData si hay (posición de Schwab)
-    var entryDate = (_schwabData && _schwabData.entry_date) ? _schwabData.entry_date : '${dateStr}';
-    var exitDate  = (_schwabData && _schwabData.exit_date)  ? _schwabData.exit_date  : null;
-    var tradeStatus = exitVal ? 'closed' : 'open';
-
-    var trade = {
-      date:          '${dateStr}',
-      entry_date:    entryDate,
-      exit_date:     exitDate,
-      status:        tradeStatus,
-      ticker:        document.getElementById('t-ticker').value,
-      strategy:      document.getElementById('t-strategy').value || null,
-      signal_code:   signalCode,
-      side:          document.getElementById('t-side').value,
-      mode:          document.getElementById('t-mode').value,
-      strike:        parseFloat(document.getElementById('t-strike').value) || null,
-      expiration:    document.getElementById('t-expiry').value || null,
-      premium_entry: entry,
-      premium_exit:  exitVal,
-      contracts:     parseInt(document.getElementById('t-contracts').value) || 1,
-      result_pct:    resultPct,
-      notes:         document.getElementById('t-notes').value || null
-    };
-    try {
-      var res = await fetch(SB_URL + '/rest/v1/trades', {
-        method: 'POST', headers: Object.assign(sbHeaders(), { 'Prefer': 'return=minimal' }),
-        body: JSON.stringify(trade)
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      var label = tradeStatus === 'open' ? '✅ Posición abierta registrada' : '✅ Trade cerrado guardado';
-      if (signalCode) label += ' · señal: ' + signalCode;
-      msg.textContent = label;
-      msg.className = 'text-xs mt-2 text-center text-green-400';
-      msg.classList.remove('hidden');
-      document.getElementById('trade-form').reset();
-      document.getElementById('t-signal-code').value = '';
-      document.getElementById('t-result-display').textContent = '—';
-      _schwabData = null;
-      setTimeout(function(){ msg.classList.add('hidden'); }, 4000);
-      loadTrades();
-    } catch(err) {
-      msg.textContent = '❌ Error: ' + err.message;
-      msg.className = 'text-xs mt-2 text-center text-red-400';
-      msg.classList.remove('hidden');
-    }
-  }
-
-  async function loadTrades() {
-    var el = document.getElementById('trades-table');
-    try {
-      var res = await fetch(SB_URL + '/rest/v1/trades?select=date,ticker,strategy,side,mode,premium_entry,premium_exit,result_pct,notes&order=created_at.desc&limit=15', {
-        headers: sbHeaders()
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      var trades = await res.json();
-      if (!trades.length) { el.innerHTML = '<p class="text-gray-600 text-center py-4">Sin trades registrados aún.</p>'; return; }
-      var rows = trades.map(function(t) {
-        var pct = t.result_pct != null ? t.result_pct : null;
-        var pctHtml = pct != null
-          ? '<span class="font-bold ' + (pct >= 0 ? 'text-green-400' : 'text-red-400') + '">' + (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%</span>'
-          : '<span class="text-gray-600">—</span>';
-        var modeBadge = t.mode === 'real'
-          ? '<span class="text-yellow-400 font-bold">REAL</span>'
-          : '<span class="text-gray-500">paper</span>';
-        return '<tr class="border-b border-gray-800 hover:bg-gray-800/30">'
-          + '<td class="py-1.5 pr-3 text-gray-400">' + t.date + '</td>'
-          + '<td class="py-1.5 pr-3 font-bold text-white">' + t.ticker + '</td>'
-          + '<td class="py-1.5 pr-3 text-gray-400">' + t.strategy + '</td>'
-          + '<td class="py-1.5 pr-3 ' + (t.side === 'CALL' ? 'text-green-400' : 'text-red-400') + ' font-bold">' + t.side + '</td>'
-          + '<td class="py-1.5 pr-3">' + pctHtml + '</td>'
-          + '<td class="py-1.5 pr-3">' + modeBadge + '</td>'
-          + '<td class="py-1.5 text-gray-500 truncate max-w-xs">' + (t.notes || '') + '</td>'
-          + '</tr>';
-      }).join('');
-      el.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-600 text-left border-b border-gray-800">'
-        + '<th class="pb-1 pr-3">FECHA</th><th class="pb-1 pr-3">TICKER</th><th class="pb-1 pr-3">STRAT</th>'
-        + '<th class="pb-1 pr-3">LADO</th><th class="pb-1 pr-3">RESULT</th><th class="pb-1 pr-3">MODO</th><th class="pb-1">NOTAS</th>'
-        + '</tr></thead><tbody>' + rows + '</tbody></table>';
-    } catch(err) {
-      el.innerHTML = '<p class="text-red-500 text-xs">Error cargando trades: ' + err.message + '</p>';
-    }
-  }
-
-  // ── Posiciones abiertas ──────────────────────────────────────────────────────
-  async function loadOpenPositions() {
-    var el = document.getElementById('open-positions-body');
-    var sec = document.getElementById('open-positions-section');
-    try {
-      var res = await fetch(
-        SB_URL + '/rest/v1/trades?select=id,entry_date,ticker,strategy,signal_code,side,strike,expiration,premium_entry,contracts,mode&status=eq.open&order=entry_date.desc',
-        { headers: sbHeaders() }
-      );
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      var positions = await res.json();
-      if (!positions.length) {
-        el.innerHTML = '<p class="text-gray-600 text-center py-2">Sin posiciones abiertas.</p>';
-        sec.style.borderColor = '';
-        return;
-      }
-      // Marcar sección en amarillo si hay posiciones
-      sec.style.borderColor = '#ca8a04';
-      var rows = positions.map(function(p) {
-        var daysOpen = p.entry_date
-          ? Math.floor((Date.now() - new Date(p.entry_date)) / 86400000) : '?';
-        var sigHtml = p.signal_code
-          ? '<span class="text-blue-400">' + p.signal_code + '</span>'
-          : '<span class="text-gray-600">—</span>';
-        return '<tr class="border-b border-gray-800">'
-          + '<td class="py-1.5 pr-2 text-yellow-400 font-bold">' + (p.ticker||'—') + '</td>'
-          + '<td class="py-1.5 pr-2 ' + (p.side==='CALL'?'text-green-400':'text-red-400') + ' font-bold">' + (p.side||'—') + '</td>'
-          + '<td class="py-1.5 pr-2 text-gray-300">' + (p.strike ? '$'+p.strike : '—') + '</td>'
-          + '<td class="py-1.5 pr-2 text-gray-400">' + (p.expiration||'—') + '</td>'
-          + '<td class="py-1.5 pr-2 text-gray-300">' + (p.premium_entry ? '$'+p.premium_entry : '—') + '</td>'
-          + '<td class="py-1.5 pr-2 text-gray-500">' + (p.contracts||1) + ' cto.</td>'
-          + '<td class="py-1.5 pr-2 text-gray-500">' + (p.entry_date||'—') + ' <span class="text-orange-400">(+' + daysOpen + 'd)</span></td>'
-          + '<td class="py-1.5 pr-2">' + sigHtml + '</td>'
-          + '<td class="py-1.5">'
-          + '<button onclick="handleCloseBtn(this)"'
-          + ' data-id="' + p.id + '" data-ticker="' + (p.ticker||'') + '" data-side="' + (p.side||'') + '"'
-          + ' data-entry="' + (p.premium_entry||0) + '" data-ctos="' + (p.contracts||1) + '" data-sig="' + (p.signal_code||'') + '"'
-          + ' class="px-2 py-0.5 rounded text-xs font-bold text-white hover:opacity-80" style="background:#b45309">Cerrar</button>'
-          + '</td>'
-          + '</tr>';
-      }).join('');
-      el.innerHTML = '<table class="w-full text-xs"><thead><tr class="text-gray-600 text-left border-b border-gray-800">'
-        + '<th class="pb-1 pr-2">TICKER</th><th class="pb-1 pr-2">LADO</th><th class="pb-1 pr-2">STRIKE</th>'
-        + '<th class="pb-1 pr-2">EXP</th><th class="pb-1 pr-2">ENTRY</th><th class="pb-1 pr-2">CTOS</th>'
-        + '<th class="pb-1 pr-2">FECHA</th><th class="pb-1 pr-2">SEÑAL</th><th class="pb-1">ACCIÓN</th>'
-        + '</tr></thead><tbody>' + rows + '</tbody></table>';
-    } catch(err) {
-      el.innerHTML = '<p class="text-red-500 text-xs">Error: ' + err.message + '</p>';
-    }
-  }
-
-  function prefillClosePosition(tradeId, ticker, side, premiumEntry, contracts, signalCode) {
-    // Pre-rellenar el formulario para registrar el cierre
-    function setSelect(id, val) {
-      var s = document.getElementById(id);
-      if (!s || !val) return;
-      for (var i = 0; i < s.options.length; i++) {
-        if (s.options[i].value === val || s.options[i].text === val) { s.selectedIndex = i; return; }
-      }
-    }
-    setSelect('t-ticker', ticker);
-    setSelect('t-side', side);
-    document.getElementById('t-contracts').value = contracts;
-    document.getElementById('t-entry').value = premiumEntry;
-    document.getElementById('t-exit').value = '';
-    document.getElementById('t-signal-code').value = signalCode || '';
-    // Marcar que es un cierre de posición existente
-    if (!_schwabData) _schwabData = {};
-    _schwabData.entry_date = null; // la fecha de entry ya está en el registro original
-    _schwabData.exit_date  = new Date().toISOString().split('T')[0];
-    // Scroll al formulario con aviso
-    var msg = document.getElementById('trade-msg');
-    msg.textContent = '🔵 Registrando cierre de ' + ticker + ' ' + side + ' — ingresa la PRIMA SALIDA y guarda';
-    msg.className = 'text-xs mt-2 text-center text-blue-400';
-    msg.classList.remove('hidden');
-    document.getElementById('trade-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    calcResult();
-  }
-
-  function handleCloseBtn(btn) {
-    prefillClosePosition(
-      btn.dataset.id,
-      btn.dataset.ticker,
-      btn.dataset.side,
-      parseFloat(btn.dataset.entry) || 0,
-      parseInt(btn.dataset.ctos) || 1,
-      btn.dataset.sig || ''
-    );
-  }
-
-  window.addEventListener('load', function() { loadTrades(); loadOpenPositions(); });
 
   // ── Schwab image analyzer (llamado también desde showExtractedFields) ─────────
   var WATCHER = 'http://127.0.0.1:9224';
@@ -1077,90 +779,12 @@ export function generateHtml(briefData, date) {
       + (f.exit_date  ? '<span class="text-gray-600 text-xs ml-1">Salida: '  + f.exit_date  + '</span>' : '')
       + '</div>';
 
-    // ── Señales exactas desde Supabase ────────────────────────────────────────
-    var signalHtml = '<div class="col-span-4 mt-2 pt-2 border-t border-blue-900/40">'
-      + '<div class="text-blue-400 text-xs font-bold mb-1">SEÑAL EXACTA PROPUESTA — elige la que ejecutaste</div>';
-
-    try {
-      var today = '${dateStr}';
-      var url = SB_URL + '/rest/v1/signals?select=signal_code,strategy,side,confidence,note'
-        + '&date=eq.' + today
-        + (f.ticker ? '&ticker=eq.' + f.ticker : '')
-        + (f.side   ? '&side=eq.'   + f.side   : '')
-        + '&order=confidence.asc';
-      var sr = await fetch(url, { headers: sbHeaders() });
-      var sigs = sr.ok ? await sr.json() : [];
-
-      if (sigs.length) {
-        var confBadge = { conditions_met: '⭐', setup_forming: '🔶', watch: '👁' };
-        signalHtml += '<div id="signal-picker" class="space-y-1">'
-          + sigs.map(function(sig, i) {
-            return '<label class="flex items-center gap-2 cursor-pointer p-1.5 rounded hover:bg-blue-900/20">'
-              + '<input type="radio" name="signal_pick" value="' + sig.signal_code + '" data-strategy="' + sig.strategy + '"'
-              + (i === 0 ? ' checked' : '') + ' class="accent-blue-500">'
-              + '<span class="text-white font-bold text-xs">' + sig.strategy + '</span>'
-              + '<span class="text-blue-300 text-xs">' + (confBadge[sig.confidence] || '') + ' ' + (sig.confidence || '') + '</span>'
-              + (sig.note ? '<span class="text-gray-500 text-xs truncate">' + sig.note + '</span>' : '')
-              + '</label>';
-          }).join('') + '</div>';
-      } else {
-        signalHtml += '<div class="text-yellow-500 text-xs">⚠️ Sin señales para ' + (f.ticker||'') + ' ' + (f.side||'') + ' hoy'
-          + ' — selecciona la estrategia manualmente en el formulario</div>';
-      }
-    } catch(e) {
-      signalHtml += '<div class="text-gray-600 text-xs">No se pudieron cargar señales: ' + e.message + '</div>';
-    }
-    signalHtml += '</div>';
+    var signalHtml = '';
 
     document.getElementById('schwab-extracted-fields').innerHTML = fieldsHtml + resultHtml + signalHtml;
     document.getElementById('schwab-extracted').classList.remove('hidden');
   }
 
-  function fillFormFromSchwab() {
-    var f = _schwabData;
-    if (!f) return;
-
-    function setSelect(id, val, addIfMissing) {
-      var s = document.getElementById(id);
-      if (!s || val == null) return;
-      var v = String(val);
-      for (var i = 0; i < s.options.length; i++) {
-        if (s.options[i].value === v || s.options[i].text === v) { s.selectedIndex = i; return; }
-      }
-      // Opción no encontrada: agregar dinámicamente si se permite
-      if (addIfMissing) {
-        var opt = document.createElement('option');
-        opt.value = v; opt.text = v;
-        s.insertBefore(opt, s.options[0]);
-        s.selectedIndex = 0;
-      }
-    }
-
-    // Leer señal seleccionada en el picker
-    var picked = document.querySelector('input[name="signal_pick"]:checked');
-    var signalCode   = picked ? picked.value                       : '';
-    var strategyPicked = picked ? picked.dataset.strategy          : '';
-
-    setSelect('t-ticker', f.ticker, true);   // addIfMissing=true — SPY, TSLA, etc. pueden no estar en el watchlist
-    setSelect('t-side',   f.side);
-    setSelect('t-mode',   f.mode || 'real');
-    if (f.strike      != null) document.getElementById('t-strike').value    = f.strike;
-    if (f.expiration)          document.getElementById('t-expiry').value    = f.expiration;
-    if (f.premium_entry != null) document.getElementById('t-entry').value   = f.premium_entry;
-    if (f.premium_exit  != null) document.getElementById('t-exit').value    = f.premium_exit;
-    if (f.contracts     != null) document.getElementById('t-contracts').value = f.contracts;
-
-    // Señal exacta elegida
-    if (strategyPicked) setSelect('t-strategy', strategyPicked);
-    document.getElementById('t-signal-code').value = signalCode;
-
-    calcResult();
-    document.getElementById('schwab-extracted').classList.add('hidden');
-    document.getElementById('schwab-ready').classList.add('hidden');
-    document.getElementById('schwab-idle').classList.remove('hidden');
-    _schwabFile = null;
-    document.getElementById('trade-form').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
 
 </script>
 </body>
@@ -1168,7 +792,7 @@ export function generateHtml(briefData, date) {
 }
 
 /** Save the full premarket checklist report as markdown in docs/sessions/ inside the repo.
- *  Also saves to Supabase (premarket_sessions table) if configured.
+ *  Also saves to Neon (premarket_sessions table) if DATABASE_URL is configured.
  *  If brief_data (JSON string of morning_brief output) is provided, also generates an HTML dashboard. */
 export async function savePremarketReport({ content, date, brief_data } = {}) {
   if (!content || typeof content !== "string") {
@@ -1231,7 +855,7 @@ export async function savePremarketReport({ content, date, brief_data } = {}) {
     path: mdPath,
     html_path: htmlPath,
     date: dateStr,
-    supabase: sbResult,
+    neon: sbResult,
     signals: signalsResult,
   };
 }
