@@ -302,7 +302,7 @@ async function sendEmail(subject, body) {
 
   try {
     const { createTransport } = await import("nodemailer");
-    const t = createTransport({ host, port: 465, secure: true, auth: { user, pass } });
+    const t = createTransport({ host, port: 587, secure: false, auth: { user, pass } }); // 587 STARTTLS
     await t.sendMail({ from: user, to, subject, text: body });
     console.log("[VIGIA] ✉️  Email:", subject);
   } catch (e) {
