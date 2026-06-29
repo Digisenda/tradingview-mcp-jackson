@@ -59,15 +59,24 @@ export function maOrder(price, smas) {
   return price > ma20 ? "mixto_alcista" : "mixto_bajista";
 }
 
+// Convert a UTC Date to minutes since midnight in ET (approximate DST)
+function toETMinutes(date) {
+  const month = date.getUTCMonth() + 1; // 1-12
+  const offsetH = month >= 3 && month <= 11 ? 4 : 5; // EDT vs EST
+  const utcMin = date.getUTCHours() * 60 + date.getUTCMinutes();
+  return utcMin - offsetH * 60;
+}
+
 /**
  * Preliminary strategy screening based on multi-TF data.
  * Full confirmation (trendlines, M15 signals) is evaluated by Claude or the watcher.
  *
- * @param {number|null} price  Current price
+ * @param {number|null} price    Current price
  * @param {{ D1: object, H1: object, M15: object }} tfData  Per-TF indicators
+ * @param {Date|null} [barTime]  Timestamp of current bar (UTC). Required for STRAT-12 timing gate.
  * @returns {{ id, position, confidence, note }[]}
  */
-export function screenStrategies(price, tfData) {
+export function screenStrategies(price, tfData, barTime = null) {
   if (price == null) return [];
   const candidates = [];
   const d1 = tfData.D1 || {};
@@ -169,6 +178,69 @@ export function screenStrategies(price, tfData) {
       id: "STRAT-11", position: "PUT", confidence: "watch",
       note: "MAs D1 entrelazadas → vigilar señal bajista potente que rompa canal en H1 con alta volatilidad BB",
     });
+  }
+
+  // STRAT-12 — Segundo Salto (timing gate: 15:45–15:55 ET)
+  // Pre-conditions are pre-computed in d1.strat12 by screener.js or watcher enrichment.
+  // Without d1.strat12, the signal is not emitted (complex multi-bar conditions).
+  const strat12 = d1.strat12;
+  if (strat12 && !strat12.fed_near && !strat12.earnings_near && strat12.tendencia_agotada) {
+    const sma20D1 = d1.smas?.[0];
+    const sma40D1 = d1.smas?.[1];
+    const priceInsideBBD1 = d1BBPos && !["above_upper", "below_lower"].includes(d1BBPos);
+
+    // Gate USD 1: |SMA20 - SMA40| spread > $1 (abs because MA order matches trend direction)
+    const spread = sma20D1 != null && sma40D1 != null ? Math.abs(sma20D1 - sma40D1) : 0;
+    const callGate = spread > 1 && price > sma20D1;
+    const putGate  = spread > 1 && price < sma20D1;
+    const gateOk = strat12.position === "CALL" ? callGate : putGate;
+
+    if (priceInsideBBD1 && gateOk) {
+      // Timing gate: 15:45–15:55 ET
+      let timingOk = false;
+      let timingNote = "sin barTime → watch";
+      if (barTime) {
+        const etMin = toETMinutes(barTime);
+        timingOk = etMin >= 15 * 60 + 45 && etMin <= 15 * 60 + 55;
+        const hh = Math.floor(Math.abs(etMin) / 60);
+        const mm = String(Math.abs(etMin) % 60).padStart(2, "0");
+        timingNote = timingOk
+          ? `${hh}:${mm} ET ✅`
+          : `fuera de horario (${hh}:${mm} ET)`;
+      }
+      candidates.push({
+        id: "STRAT-12",
+        position: strat12.position,
+        confidence: timingOk ? "conditions_met" : "watch",
+        note: `STRAT-12: primer_salto=gap overnight (${strat12.primer_salto_gap?.toFixed(2)}), gate USD 1 con SMA40 (aprox. EMA40), macro_filter=OK. Timing: ${timingNote}`,
+      });
+    }
+  }
+
+  // STRAT-13 — Saliendo de BB con Volatilidad
+  // CORRECCIÓN CRÍTICA: trigger es precio DENTRO de BB (NO tocando ni fuera).
+  // STRAT-13-CF-001: si precio ya está fuera del BB, NO entrar.
+  // Requiere m15.bb_prev_width pre-computado; sin él → confidence='watch'.
+  const m15CurrentWidth = m15.bb?.width ?? null;
+  const m15PrevWidth = m15.bb_prev_width ?? null;
+  const m15PriceInside =
+    m15BBPos != null && !["above_upper", "below_lower"].includes(m15BBPos);
+  const widthExpanding =
+    m15CurrentWidth != null && m15PrevWidth != null && m15CurrentWidth > m15PrevWidth;
+
+  if (m15PriceInside) {
+    const callDir = m15BBPos === "above_middle"; // precio > basis, expansión alcista esperada
+    const putDir  = m15BBPos === "below_middle"; // precio < basis, expansión bajista esperada
+    if (callDir || putDir) {
+      if (widthExpanding) {
+        candidates.push({
+          id: "STRAT-13",
+          position: callDir ? "CALL" : "PUT",
+          confidence: "conditions_met",
+          note: `STRAT-13: precio dentro de BB (${m15BBPos}), width expandiendo (${m15PrevWidth.toFixed(2)} → ${m15CurrentWidth.toFixed(2)}). CF-001: precio dentro de banda ✅`,
+        });
+      }
+    }
   }
 
   return candidates;

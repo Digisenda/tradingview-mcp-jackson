@@ -409,6 +409,7 @@ async function tick(rules) {
 
   tickCount++;
   const doRefresh = tickCount % REFRESH_EVERY === 1; // refresh on tick 1, 11, 21...
+  const tickBarTime = new Date(); // captured once per tick so all symbols share the same timestamp
 
   for (const symbol of watchlist) {
     try {
@@ -433,7 +434,7 @@ async function tick(rules) {
 
       if (price == null) continue;
 
-      const candidates = screenStrategies(price, tfData);
+      const candidates = screenStrategies(price, tfData, tickBarTime);
       const vetoFlags  = buildVetoFlags(rules, symbol);
 
       for (const cand of candidates) {
