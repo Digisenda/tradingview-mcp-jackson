@@ -135,12 +135,16 @@ async function scanSymbol(symbol) {
         await chart.setTimeframe({ timeframe: tf });
         await new Promise((r) => setTimeout(r, 800));
 
-        const [indicators, quote] = await Promise.all([
-          data.getStudyValues(),
-          quoteData == null ? data.getQuote({}) : Promise.resolve(null),
-        ]);
-
-        if (quote?.success) quoteData = quote;
+        // Fetch quote first (with explicit symbol) so getQuote's internal
+        // setSymbol+waitForChartReady guarantees the chart is on the right
+        // ticker before getStudyValues reads indicators. Running both in
+        // parallel was a race that caused price cross-contamination between
+        // consecutive symbol scans.
+        if (quoteData == null) {
+          const q = await data.getQuote({ symbol });
+          if (q?.success) quoteData = q;
+        }
+        const indicators = await data.getStudyValues();
 
         const price = quoteData?.last ?? quoteData?.close ?? null;
         const bb = extractBB(indicators);
@@ -171,10 +175,16 @@ async function scanSymbol(symbol) {
 
 // ─── JSONL persistence ────────────────────────────────────────────────────────
 
-function signalLogPath() {
-  const dir = join(homedir(), ".tradingview-mcp");
+function outputDir() {
+  const dir = process.env.VIGIA_OUTPUT_DIR
+    ? resolve(process.env.VIGIA_OUTPUT_DIR)
+    : join(homedir(), ".tradingview-mcp");
   mkdirSync(dir, { recursive: true });
-  return join(dir, `signals-${todayET()}.jsonl`);
+  return dir;
+}
+
+function signalLogPath() {
+  return join(outputDir(), `signals-${todayET()}.jsonl`);
 }
 
 function logSignal(entry) {
@@ -192,7 +202,7 @@ function logSignal(entry) {
 // ─── Dashboard HTML ───────────────────────────────────────────────────────────
 
 function signalHtmlPath(date) {
-  return join(homedir(), ".tradingview-mcp", `signals-${date}.html`);
+  return join(outputDir(), `signals-${date}.html`);
 }
 
 function updateSignalsHtml() {

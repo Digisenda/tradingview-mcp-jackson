@@ -91,45 +91,53 @@ export function screenStrategies(price, tfData, barTime = null) {
   const h1MAOrd = h1.ma_order;
   const m15Width = m15.bb?.width;
 
-  // STRAT-01 CALL — Cambio tendencia al alza
+  // STRAT-01 CALL — Cambio tendencia al alza (rules.json STRAT-01-PC-001)
+  // Solo detectable automáticamente: contexto H1 bajista (precondición).
+  // Triggers (ruptura trendline + cierre sobre MA20 + vela confirmación M15) son manuales.
   if (h1BBPos === "below_middle" || h1MAOrd === "bajista" || h1MAOrd === "mixto_bajista") {
     candidates.push({
-      id: "STRAT-01", position: "CALL", confidence: "setup_forming",
-      note: "H1 bajista → vigilar ruptura trendline bajista H1 + cierre sobre MA20 H1 + confirmación M15 alcista",
+      id: "STRAT-01", position: "CALL", confidence: "watch",
+      note: "H1 bajista (PC-001 ✅) → pendiente manual: ruptura trendline bajista H1 + cierre sobre MA20 H1 + confirmación M15 alcista",
     });
   }
 
-  // STRAT-02 PUT — Cambio tendencia a la baja
+  // STRAT-02 PUT — Cambio tendencia a la baja (rules.json STRAT-02-PC-001)
+  // Solo detectable automáticamente: contexto H1 alcista (precondición).
   if (h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista") {
     candidates.push({
-      id: "STRAT-02", position: "PUT", confidence: "setup_forming",
-      note: "H1 alcista → vigilar ruptura trendline alcista H1 + cierre bajo MA20 H1 + confirmación M15 bajista",
+      id: "STRAT-02", position: "PUT", confidence: "watch",
+      note: "H1 alcista (PC-001 ✅) → pendiente manual: ruptura trendline alcista H1 + cierre bajo MA20 H1 + confirmación M15 bajista",
     });
   }
 
-  // STRAT-03 PUT — Rebote punto medio D1 bajista
-  const d1Bajista = d1BBPos === "below_middle" || d1MAOrd === "bajista";
-  const h1Alcista = h1BBPos === "above_middle" || h1MAOrd === "alcista";
-  if (d1Bajista && h1Alcista) {
-    candidates.push({
-      id: "STRAT-03", position: "PUT", confidence: "conditions_met",
-      note: "D1 bajista + H1 en retroceso alcista → precio acercándose a BB Middle D1, vigilar rechazo",
-    });
-  }
+  // STRAT-03 — non_operative en rules.json; no se emite.
 
-  // STRAT-04/05 — Apertura fuera de Bollinger (requiere BB M15 estrecho)
-  if (m15Width != null && m15Width < NARROW) {
-    candidates.push({
-      id: "STRAT-04", position: "PUT", confidence: "watch",
-      note: `BB M15 estrecho (ancho: ${m15Width.toFixed(2)}) → vigilar GAP extremo sobre banda superior M15 en apertura`,
-    });
-    candidates.push({
-      id: "STRAT-05", position: "CALL", confidence: "watch",
-      note: `BB M15 estrecho (ancho: ${m15Width.toFixed(2)}) → vigilar GAP extremo bajo banda inferior M15 en apertura`,
-    });
+  // STRAT-04/05 — Apertura fuera de Bollinger (rules.json CF-002: primeros 5 min; TR-001: precio ya fuera de banda)
+  // Gate: 09:30–09:35 ET (CF-002). Precio debe estar FUERA de la banda (TR-001 ya ocurrió).
+  // Sin barTime → no emite (no se puede verificar la ventana de apertura).
+  const openingWindowOk = barTime ? (() => {
+    const etMin = toETMinutes(barTime);
+    return etMin >= 9 * 60 + 30 && etMin <= 9 * 60 + 35;
+  })() : false;
+
+  if (openingWindowOk && m15Width != null && m15Width < NARROW) {
+    if (m15BBPos === "above_upper") {
+      candidates.push({
+        id: "STRAT-04", position: "PUT", confidence: "conditions_met",
+        note: `BB M15 estrecho (${m15Width.toFixed(2)}) + precio sobre banda superior ✅ → GAP extremo al alza confirmado, esperar reversión (CF-002: ejecutar dentro de 5 min apertura)`,
+      });
+    }
+    if (m15BBPos === "below_lower") {
+      candidates.push({
+        id: "STRAT-05", position: "CALL", confidence: "conditions_met",
+        note: `BB M15 estrecho (${m15Width.toFixed(2)}) + precio bajo banda inferior ✅ → GAP extremo a la baja confirmado, esperar reversión (CF-002: ejecutar dentro de 5 min apertura)`,
+      });
+    }
   }
 
   // STRAT-08/09 — Double Green CT15 (Cambio de Tendencia M15)
+  // Gate de tiempo: SOLO 1ª vela M15 (09:30–09:45 ET). Sin barTime → no emite.
+  // Gate de contexto: D1 o H1 deben confirmar la dirección — sin contexto no hay CT15.
   const h1BearishCtx = h1BBPos === "below_middle" || h1MAOrd === "bajista" || h1MAOrd === "mixto_bajista";
   const h1BullishCtx = h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista";
   const d1BearishCtx = d1BBPos === "below_middle" || d1MAOrd === "bajista" || d1MAOrd === "mixto_bajista";
@@ -138,8 +146,14 @@ export function screenStrategies(price, tfData, barTime = null) {
   const m15BelowMid   = m15BBPos === "below_middle";
   const m15AboveMid   = m15BBPos === "above_middle";
 
-  // STRAT-08 CALL: precio M15 bajo PM (o en PM) y dentro de BB — contexto D1/H1 bajista
-  if (m15InsideBands && !m15AboveMid) {
+  let ct15TimingOk = false;
+  if (barTime) {
+    const etMin = toETMinutes(barTime);
+    ct15TimingOk = etMin >= 9 * 60 + 30 && etMin <= 9 * 60 + 45;
+  }
+
+  // STRAT-08 CALL: M15 bajo PM dentro BB + contexto D1/H1 bajista + 1ª vela M15
+  if (ct15TimingOk && m15InsideBands && !m15AboveMid && (d1BearishCtx || h1BearishCtx)) {
     const confirmed = [];
     const pending   = [];
     if (m15BelowMid)   confirmed.push("M15 bajo PM dentro BB"); else pending.push("M15 bajo PM");
@@ -148,13 +162,13 @@ export function screenStrategies(price, tfData, barTime = null) {
     pending.push("trendline M15 trazada", "gap up rompe PM+trendline al abrir", "BB abre 1ª~3ª vela M15");
     candidates.push({
       id: "STRAT-08", position: "CALL",
-      confidence: (m15BelowMid && (d1BearishCtx || h1BearishCtx)) ? "setup_forming" : "watch",
+      confidence: (m15BelowMid && d1BearishCtx && h1BearishCtx) ? "setup_forming" : "watch",
       note: `CT15 CALL: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
     });
   }
 
-  // STRAT-09 PUT: precio M15 sobre PM (o en PM) y dentro de BB — contexto D1/H1 alcista
-  if (m15InsideBands && !m15BelowMid) {
+  // STRAT-09 PUT: M15 sobre PM dentro BB + contexto D1/H1 alcista + 1ª vela M15
+  if (ct15TimingOk && m15InsideBands && !m15BelowMid && (d1BullishCtx || h1BullishCtx)) {
     const confirmed = [];
     const pending   = [];
     if (m15AboveMid)   confirmed.push("M15 sobre PM dentro BB"); else pending.push("M15 sobre PM");
@@ -163,22 +177,12 @@ export function screenStrategies(price, tfData, barTime = null) {
     pending.push("trendline M15 trazada", "gap down rompe PM+trendline al abrir", "BB abre 1ª~3ª vela M15");
     candidates.push({
       id: "STRAT-09", position: "PUT",
-      confidence: (m15AboveMid && (d1BullishCtx || h1BullishCtx)) ? "setup_forming" : "watch",
+      confidence: (m15AboveMid && d1BullishCtx && h1BullishCtx) ? "setup_forming" : "watch",
       note: `CT15 PUT: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
     });
   }
 
-  // STRAT-10/11 — Ruptura lateral mediano plazo
-  if (d1MAOrd === "entrelazado") {
-    candidates.push({
-      id: "STRAT-10", position: "CALL", confidence: "watch",
-      note: "MAs D1 entrelazadas → vigilar señal alcista potente que rompa canal en H1 con alta volatilidad BB",
-    });
-    candidates.push({
-      id: "STRAT-11", position: "PUT", confidence: "watch",
-      note: "MAs D1 entrelazadas → vigilar señal bajista potente que rompa canal en H1 con alta volatilidad BB",
-    });
-  }
+  // STRAT-10/11 — non_operative en rules.json; no se emiten.
 
   // STRAT-12 — Segundo Salto (timing gate: 15:45–15:55 ET)
   // Pre-conditions are pre-computed in d1.strat12 by screener.js or watcher enrichment.
@@ -218,26 +222,28 @@ export function screenStrategies(price, tfData, barTime = null) {
   }
 
   // STRAT-13 — Saliendo de BB con Volatilidad
-  // CORRECCIÓN CRÍTICA: trigger es precio DENTRO de BB (NO tocando ni fuera).
-  // STRAT-13-CF-001: si precio ya está fuera del BB, NO entrar.
-  // Requiere m15.bb_prev_width pre-computado; sin él → confidence='watch'.
+  // Prioridad (rules.json execution_profiles.double_green): si STRAT-08/09 ya está en candidates
+  // para este tick, STRAT-13 se suprime — misma entrada no puede clasificarse con dos IDs.
+  // STRAT-13-CF-001: precio debe estar DENTRO de BB (no tocando ni fuera).
+  // Requiere m15.bb_prev_width pre-computado para detectar expansión de volatilidad (TR-001).
   const m15CurrentWidth = m15.bb?.width ?? null;
   const m15PrevWidth = m15.bb_prev_width ?? null;
   const m15PriceInside =
     m15BBPos != null && !["above_upper", "below_lower"].includes(m15BBPos);
   const widthExpanding =
     m15CurrentWidth != null && m15PrevWidth != null && m15CurrentWidth > m15PrevWidth;
+  const ct15AlreadyFired = candidates.some(c => c.id === "STRAT-08" || c.id === "STRAT-09");
 
-  if (m15PriceInside) {
-    const callDir = m15BBPos === "above_middle"; // precio > basis, expansión alcista esperada
-    const putDir  = m15BBPos === "below_middle"; // precio < basis, expansión bajista esperada
+  if (!ct15AlreadyFired && m15PriceInside) {
+    const callDir = m15BBPos === "above_middle";
+    const putDir  = m15BBPos === "below_middle";
     if (callDir || putDir) {
       if (widthExpanding) {
         candidates.push({
           id: "STRAT-13",
           position: callDir ? "CALL" : "PUT",
           confidence: "conditions_met",
-          note: `STRAT-13: precio dentro de BB (${m15BBPos}), width expandiendo (${m15PrevWidth.toFixed(2)} → ${m15CurrentWidth.toFixed(2)}). CF-001: precio dentro de banda ✅`,
+          note: `STRAT-13: precio dentro de BB (${m15BBPos}) ✅, width expandiendo (${m15PrevWidth.toFixed(2)} → ${m15CurrentWidth.toFixed(2)}) ✅. CF-001: no expuesto ✅`,
         });
       }
     }
