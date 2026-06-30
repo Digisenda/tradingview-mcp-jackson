@@ -302,25 +302,42 @@ async function sendToast(title, body) {
 }
 
 // ─── Email (optional — configure NODEMAILER_* in .env) ───────────────────────
+// Transport se crea UNA sola vez en initEmail() y se reutiliza para todas las señales.
+// Crear un transport por llamada abre una conexión TCP+STARTTLS por cada email — con
+// 10+ señales en ráfaga, el servidor SMTP rechaza las conexiones por rate-limit/concurrencia.
 
-async function sendEmail(subject, body) {
+let _emailTransport = null;
+let _emailTo = "";
+
+async function initEmail() {
   const host = (process.env.NODEMAILER_HOST || "").trim();
   const user = (process.env.NODEMAILER_USER || "").trim();
-  const pass = (process.env.NODEMAILER_PASS || "").replace(/\s+/g, ""); // App Passwords: strip spaces
-  const to   = (process.env.NODEMAILER_TO   || "").trim();
-  if (!host || !user || !pass || !to) return;
+  const pass = (process.env.NODEMAILER_PASS || "").replace(/\s+/g, "");
+  _emailTo   = (process.env.NODEMAILER_TO   || "").trim();
+
+  if (!host || !user || !pass || !_emailTo) {
+    console.log("  Email     : no configurado (NODEMAILER_* vars ausentes)");
+    return;
+  }
 
   try {
     const { createTransport } = await import("nodemailer");
-    const t = createTransport({ host, port: 587, secure: false, auth: { user, pass } }); // 587 STARTTLS
-    await t.sendMail({ from: user, to, subject, text: body });
-    console.log("[VIGIA] ✉️  Email:", subject);
+    _emailTransport = createTransport({ host, port: 587, secure: false, auth: { user, pass } });
+    await _emailTransport.verify(); // falla aquí si el SMTP no está listo
+    console.log(`  Email     : ✅ SMTP listo → ${_emailTo}`);
   } catch (e) {
-    if (e.code === "ERR_MODULE_NOT_FOUND") {
-      console.warn("[VIGIA] ℹ️  Email omitido — instala nodemailer: npm install nodemailer");
-    } else {
-      console.warn("[VIGIA] ⚠️ Email falló:", e.message);
-    }
+    console.warn(`  Email     : ⚠️ SMTP no disponible — ${e.message} (código: ${e.code ?? "?"})`);
+    _emailTransport = null;
+  }
+}
+
+async function sendEmail(subject, body) {
+  if (!_emailTransport || !_emailTo) return;
+  try {
+    await _emailTransport.sendMail({ from: process.env.NODEMAILER_USER, to: _emailTo, subject, text: body });
+    console.log(`[VIGIA] ✉️  Email enviado: ${subject}`);
+  } catch (e) {
+    console.warn(`[VIGIA] ⚠️ Email falló: ${e.message} (código: ${e.code ?? "?"})`);
   }
 }
 
@@ -474,6 +491,7 @@ async function main() {
   console.log(`  Log JSONL : ${signalLogPath()}`);
   const htmlPath = updateSignalsHtml();
   console.log(`  Dashboard : ${htmlPath}`);
+  await initEmail();
   console.log("  Ctrl+C para detener\n");
 
   // First tick immediately (forces full scan)
