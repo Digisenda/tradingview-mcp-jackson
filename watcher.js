@@ -341,6 +341,58 @@ async function sendEmail(subject, body) {
   }
 }
 
+// ─── Email batch buffer ───────────────────────────────────────────────────────
+// Acumula señales en una ventana fija y envía UN solo email con todas.
+// El timer arranca con la primera señal del batch y NO se resetea con las siguientes:
+// así el email de apertura (ráfaga de 10+ señales en 2 min) llega ~60 s después de
+// la primera señal, sin esperar a que paren de llegar.
+// Toast sigue siendo por señal individual (instantáneo, bajo costo).
+
+const BATCH_WINDOW_S = parseInt(process.env.VIGIA_EMAIL_BATCH_WINDOW_S || "60", 10);
+const _emailBatch = [];
+let _batchTimer = null;
+
+async function flushEmailBatch() {
+  _batchTimer = null;
+  if (_emailBatch.length === 0) return;
+
+  const items = _emailBatch.splice(0); // vaciar buffer
+  const tickers = [...new Set(items.map((i) => i.ticker))].join("·");
+  const subject = `[VIGIA] ${items.length} señal${items.length > 1 ? "es" : ""} — ${tickers}`;
+
+  const header = `${"TICKER".padEnd(7)}${"ESTRATEGIA".padEnd(11)}${"LADO".padEnd(6)}${"CONFIANZA".padEnd(18)}PRECIO`;
+  const sep = "─".repeat(70);
+  const rows = items.map((i) => {
+    const veto = i.vetoFlags.length ? `  ⚠️ ${i.vetoFlags.join(", ")}` : "";
+    return (
+      `${i.ticker.padEnd(7)}${i.stratId.padEnd(11)}${i.side.padEnd(6)}${i.confidence.padEnd(18)}` +
+      `$${i.price?.toFixed(2) ?? "?"}\n  ${i.note}${veto}`
+    );
+  });
+
+  const etNow = new Date().toLocaleString("es-MX", { timeZone: "America/New_York" });
+  const body = [`[VIGIA] ${items.length} señal(es) — ${etNow} ET`, "", header, sep, ...rows].join("\n");
+
+  await sendEmail(subject, body);
+}
+
+function queueEmail(ticker, candidate, price, vetoFlags) {
+  _emailBatch.push({
+    ticker,
+    stratId:    candidate.id,
+    side:       candidate.position,
+    confidence: candidate.confidence,
+    price,
+    note:       candidate.note,
+    vetoFlags,
+  });
+
+  if (!_batchTimer) { // ventana fija: el timer solo arranca con la primera señal del batch
+    _batchTimer = setTimeout(flushEmailBatch, BATCH_WINDOW_S * 1000);
+    console.log(`[VIGIA] 📨 Email batch abierto — se enviará en ~${BATCH_WINDOW_S}s`);
+  }
+}
+
 // ─── Alert dispatch ───────────────────────────────────────────────────────────
 
 async function fireAlert(symbol, candidate, price, vetoFlags) {
@@ -376,17 +428,7 @@ async function fireAlert(symbol, candidate, price, vetoFlags) {
     `@$${price?.toFixed(2) ?? "?"} · ${candidate.note.slice(0, 100)}`
   );
 
-  await sendEmail(
-    `[VIGIA] ${candidate.id} ${candidate.position} ${symbol}`,
-    [
-      `Señal: ${candidate.id} ${candidate.position} en ${symbol}`,
-      `Precio: $${price?.toFixed(2) ?? "?"}`,
-      `Confianza: ${candidate.confidence}`,
-      `Nota: ${candidate.note}`,
-      vetoFlags.length ? `⚠️ Veto: ${vetoFlags.join(", ")}` : "",
-      `Hora: ${new Date().toLocaleString("es-MX", { timeZone: "America/New_York" })} ET`,
-    ].filter(Boolean).join("\n")
-  );
+  queueEmail(symbol, candidate, price, vetoFlags); // batched — el email sale agrupado
 }
 
 // ─── Signal state — only fire when confidence improves ───────────────────────
