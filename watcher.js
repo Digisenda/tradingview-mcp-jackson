@@ -87,6 +87,15 @@ function isInSessionWindow(sessionStr) {
   return hm >= start && hm <= end;
 }
 
+// True during the `warmupMinutes` window right before primary_window opens.
+function isInWarmupWindow(sessionStr, warmupMinutes) {
+  const match = (sessionStr || "09:30–11:30 ET").match(/(\d{1,2}):(\d{2})[–-](\d{1,2}):(\d{2})/);
+  if (!match || !warmupMinutes) return false;
+  const start = parseInt(match[1]) * 60 + parseInt(match[2]);
+  const hm = nowHM();
+  return hm >= start - warmupMinutes && hm < start;
+}
+
 function todayET() {
   return new Date()
     .toLocaleString("en-US", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" })
@@ -286,22 +295,6 @@ function updateSignalsHtml() {
   return htmlPath;
 }
 
-// ─── Toast notification (node-notifier — npm install node-notifier) ──────────
-
-async function sendToast(title, body) {
-  try {
-    const { default: notifier } = await import("node-notifier");
-    notifier.notify({ title, message: body, sound: true, wait: false });
-    console.log(`[VIGIA] 🔔 Toast enviado`);
-  } catch (e) {
-    if (e.code === "ERR_MODULE_NOT_FOUND") {
-      console.warn("[VIGIA] ℹ️  Toast omitido — instala: npm install node-notifier");
-    } else {
-      console.warn("[VIGIA] ⚠️ Toast falló:", e.message);
-    }
-  }
-}
-
 // ─── Email (optional — configure NODEMAILER_* in .env) ───────────────────────
 
 async function sendEmail(subject, body) {
@@ -351,14 +344,9 @@ async function fireAlert(symbol, candidate, price, vetoFlags) {
   console.log(`        📊 Dashboard: ${htmlPath}`);
 
   if (DRY_RUN) {
-    console.log("        [dry-run] — sin toast ni email");
+    console.log("        [dry-run] — sin email");
     return;
   }
-
-  await sendToast(
-    `[VIGIA] ${candidate.id} ${candidate.position} ${symbol}`,
-    `@$${price?.toFixed(2) ?? "?"} · ${candidate.note.slice(0, 100)}`
-  );
 
   await sendEmail(
     `[VIGIA] ${candidate.id} ${candidate.position} ${symbol}`,
@@ -400,6 +388,7 @@ function markFired(symbol, cand) {
 const tfCache = new Map();
 let tickCount = 0;
 let lastTickDay = null;
+let warmedUpToday = false;
 const REFRESH_EVERY = 10;
 const TICK_MS = 30_000;
 
@@ -413,6 +402,7 @@ async function tick(rules) {
     lastKnownPrices.clear();
     wasInSession = false;
     tickCount = 0;
+    warmedUpToday = false;
     console.log(`\n[VIGIA] 📅 Nuevo día (${today}) — estado reiniciado`);
   }
   lastTickDay = today;
@@ -430,13 +420,27 @@ async function tick(rules) {
       }
       wasInSession = false;
     }
+    if (!warmedUpToday && isInWarmupWindow(session.primary_window, session.warmup_minutes)) {
+      console.log(`\n[VIGIA] 🔥 Precalentando caché D1/H1/M15 (${session.warmup_minutes} min antes de apertura)...`);
+      for (const symbol of watchlist) {
+        try {
+          const scan = await scanSymbol(symbol);
+          tfCache.set(symbol, scan.tfData);
+        } catch (err) {
+          console.error(`[VIGIA] ⚠️ Precalentamiento falló para ${symbol}:`, err.message);
+        }
+      }
+      warmedUpToday = true;
+      console.log(`[VIGIA] ✅ Caché precalentada — lista para apertura`);
+    }
     process.stdout.write(".");
     return;
   }
   wasInSession = true;
 
   tickCount++;
-  const doRefresh = tickCount % REFRESH_EVERY === 1; // refresh on tick 1, 11, 21...
+  // Skip the forced tick-1 refresh if the warmup pass already populated tfCache today.
+  const doRefresh = tickCount % REFRESH_EVERY === 1 && !(tickCount === 1 && warmedUpToday);
   const tickBarTime = new Date(); // captured once per tick so all symbols share the same timestamp
 
   for (const symbol of watchlist) {
@@ -502,7 +506,8 @@ async function main() {
   const { rules, path: rulesFrom } = loadRules();
   console.log(`  rules.json: ${rulesFrom}`);
   console.log(`  Watchlist : ${(rules.watchlist || []).join(", ")}`);
-  console.log(`  Ventana   : ${rules.session?.primary_window || "09:30-11:30 ET"}`);
+  console.log(`  Ventana   : ${rules.session?.primary_window || "09:30-11:30 ET"}` +
+    (rules.session?.warmup_minutes ? ` (precalentamiento ${rules.session.warmup_minutes} min antes)` : ""));
   console.log(`  Log JSONL : ${signalLogPath()}`);
   const htmlPath = updateSignalsHtml();
   console.log(`  Dashboard : ${htmlPath}`);

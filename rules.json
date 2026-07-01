@@ -47,6 +47,7 @@
   },
   "session": {
     "primary_window": "09:30–11:30 ET",
+    "warmup_minutes": 5,
     "focus": "market open — primary profit window",
     "avoid": "FED days ±2 business days, Earnings window ±7 days per ticker"
   },
@@ -1016,9 +1017,9 @@
     ]
   },
   "paper_trading": {
-    "enabled": false,
+    "enabled": true,
     "min_score": 60,
-    "_note": "enabled=false por defecto. Cambiar a true solo después de /security-review. min_score=60 ejecuta setup_forming (60) y conditions_met (80); watch (40) se omite."
+    "_note": "Activado 2026-07-01 tras /security-review (0 hallazgos). min_score=60 ejecuta setup_forming (60) y conditions_met (80); watch (40) se omite."
   },
   "notes": "Options strategy — CALL/PUT directional only. Fuente histórica con 13 estrategias preservadas. Operative: STRAT-01, STRAT-02, STRAT-04, STRAT-05, STRAT-08, STRAT-09, STRAT-12 y STRAT-13. Non_operative: STRAT-03, STRAT-06, STRAT-07, STRAT-10 y STRAT-11; permanecen completas y pueden reactivarse cambiando su estado. Double Green es un método de ejecución, no una estrategia adicional. Gestión global obligatoria: +12% / -15%. Activos habilitados: NVDA y TSLA.",
   "execution_profiles": {
