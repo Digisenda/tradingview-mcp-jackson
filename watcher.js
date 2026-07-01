@@ -27,6 +27,7 @@ import {
   maOrder,
   screenStrategies,
 } from "./src/core/signals.js";
+import { onSignal, onTick, onSessionEnd, reportStartupState } from "./paper-executor.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -376,6 +377,8 @@ async function fireAlert(symbol, candidate, price, vetoFlags) {
 
 const firedSignals = new Map(); // key → last confidence rank fired
 const CONFIDENCE_RANK = { watch: 0, setup_forming: 1, conditions_met: 2 };
+const lastKnownPrices = new Map(); // symbol → last price seen during session (for end-of-session expiry)
+let wasInSession = false;
 
 function shouldFire(symbol, cand) {
   if (!(cand.confidence in CONFIDENCE_RANK)) {
@@ -407,15 +410,30 @@ async function tick(rules) {
   if (lastTickDay && lastTickDay !== today) {
     firedSignals.clear();
     tfCache.clear();
+    lastKnownPrices.clear();
+    wasInSession = false;
     tickCount = 0;
     console.log(`\n[VIGIA] 📅 Nuevo día (${today}) — estado reiniciado`);
   }
   lastTickDay = today;
 
-  if (!isInSessionWindow(session.primary_window)) {
+  const inSession = isInSessionWindow(session.primary_window);
+  if (!inSession) {
+    if (wasInSession && rules.paper_trading?.enabled) {
+      for (const symbol of watchlist) {
+        const px = lastKnownPrices.get(symbol);
+        if (px != null && px > 0) {
+          await onSessionEnd(symbol, px);
+        } else {
+          console.warn(`[PAPER] ⚠️ Sin precio para ${symbol} al fin de sesión — posición permanece abierta`);
+        }
+      }
+      wasInSession = false;
+    }
     process.stdout.write(".");
     return;
   }
+  wasInSession = true;
 
   tickCount++;
   const doRefresh = tickCount % REFRESH_EVERY === 1; // refresh on tick 1, 11, 21...
@@ -443,6 +461,12 @@ async function tick(rules) {
       }
 
       if (price == null) continue;
+      lastKnownPrices.set(symbol, price);
+
+      // Paper trading: OCO monitor for open positions (independent of signals)
+      if (rules.paper_trading?.enabled) {
+        await onTick(symbol, price);
+      }
 
       const candidates = screenStrategies(price, tfData, tickBarTime);
       const vetoFlags  = buildVetoFlags(rules, symbol);
@@ -451,6 +475,14 @@ async function tick(rules) {
         if (shouldFire(symbol, cand)) {
           await fireAlert(symbol, cand, price, vetoFlags);
           markFired(symbol, cand);
+          // Paper trading: open position alongside fireAlert (NOT inside it)
+          if (rules.paper_trading?.enabled) {
+            await onSignal(
+              { ticker: symbol, strategy_id: cand.id, side: cand.position, confidence: cand.confidence, veto_flags: vetoFlags, note: cand.note },
+              price,
+              rules.paper_trading
+            );
+          }
         }
       }
     } catch (err) {
@@ -474,7 +506,11 @@ async function main() {
   console.log(`  Log JSONL : ${signalLogPath()}`);
   const htmlPath = updateSignalsHtml();
   console.log(`  Dashboard : ${htmlPath}`);
+  const paperEnabled = rules.paper_trading?.enabled === true;
+  console.log(`  Paper trd : ${paperEnabled ? `ACTIVO (min_score=${rules.paper_trading.min_score ?? 60})` : "DESACTIVADO (enabled=false)"}`);
   console.log("  Ctrl+C para detener\n");
+
+  if (paperEnabled) reportStartupState();
 
   // First tick immediately (forces full scan)
   await tick(rules);
