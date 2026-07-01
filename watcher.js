@@ -28,6 +28,9 @@ import {
   screenStrategies,
 } from "./src/core/signals.js";
 import { onSignal, onTick, onSessionEnd, reportStartupState } from "./paper-executor.js";
+import * as fundamentals from "./src/core/fundamentals.js";
+import { renderUnifiedDashboard } from "./src/core/dashboard.js";
+import { weekDirFor } from "./src/core/paths.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -104,20 +107,19 @@ function todayET() {
 
 // ─── FED/Earnings veto check ──────────────────────────────────────────────────
 
-function buildVetoFlags(rules, ticker) {
-  const today = new Date().toISOString().split("T")[0]; // UTC, consistent with fundamental.js
+// D6: única fuente de verdad — fundamentals.js (que envuelve checkFundamentals()
+// de fundamental.js, con fallback a rules.json ya incorporado ahí). Antes esta
+// función leía rules.fundamental_filters directo, duplicando (peor, sin scrape
+// en vivo) la misma lógica que ya usaba morning.js — backlog #9.
+export function buildVetoFlags(ticker) {
   const flags = [];
+  const fe = fundamentals.getFedEarnings();
 
-  for (const fd of rules.fundamental_filters?.fed_dates || []) {
-    const diff = Math.abs((new Date(fd) - new Date(today)) / 86400000);
-    if (diff <= 2) { flags.push(`FED ${fd}`); break; }
-  }
+  const fedEvent = fe?.fed?.upcoming?.find((e) => Math.abs(e.days_away) <= 2);
+  if (fedEvent) flags.push(`FED ${fedEvent.date}`);
 
-  const earnDate = rules.fundamental_filters?.earnings?.[ticker];
-  if (earnDate) {
-    const diff = Math.abs((new Date(earnDate) - new Date(today)) / 86400000);
-    if (diff <= 7) flags.push(`EARNINGS ${earnDate}`);
-  }
+  const earn = fe?.earnings?.[ticker];
+  if (earn?.active) flags.push(`EARNINGS ${earn.date}`);
 
   return flags;
 }
@@ -215,11 +217,9 @@ function signalHtmlPath(date) {
   return join(outputDir(), `signals-${date}.html`);
 }
 
-function updateSignalsHtml() {
-  const date = todayET();
+/** Señales del día, leídas del JSONL (misma fuente para signals-*.html y el dashboard unificado). */
+function readTodaySignals() {
   const jsonlPath = signalLogPath();
-  const htmlPath  = signalHtmlPath(date);
-
   const entries = [];
   if (existsSync(jsonlPath)) {
     for (const line of readFileSync(jsonlPath, "utf8").split("\n")) {
@@ -227,6 +227,13 @@ function updateSignalsHtml() {
       try { entries.push(JSON.parse(line)); } catch {}
     }
   }
+  return entries;
+}
+
+function updateSignalsHtml() {
+  const date = todayET();
+  const htmlPath  = signalHtmlPath(date);
+  const entries = readTodaySignals();
 
   const now = new Date().toLocaleString("en-US", {
     timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: true,
@@ -293,6 +300,59 @@ function updateSignalsHtml() {
     console.warn("[VIGIA] ⚠️ No se pudo escribir dashboard HTML:", e.message);
   }
   return htmlPath;
+}
+
+// ─── Dashboard unificado (T6 — genera EN PARALELO a signals-*.html/premarket-*.html
+// durante la semana de validación en vivo; D5, backlog #6) ────────────────────
+
+let _premarketDataCache; // undefined = no leído aún hoy, null = no existe/falló, objeto = ok
+let _premarketDataDay = null;
+
+/** Lee premarket-YYYY-MM-DD.json (escrito por morning.js, T1) una vez por día. */
+function loadPremarketData(dateStr) {
+  if (_premarketDataDay === dateStr && _premarketDataCache !== undefined) {
+    return _premarketDataCache;
+  }
+  _premarketDataDay = dateStr;
+  try {
+    const p = join(weekDirFor(dateStr), `premarket-${dateStr}.json`);
+    _premarketDataCache = existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null;
+  } catch (e) {
+    console.warn("[VIGIA] ⚠️ No se pudo leer premarket JSON:", e.message);
+    _premarketDataCache = null;
+  }
+  return _premarketDataCache;
+}
+
+function dashboardHtmlPath(date) {
+  return join(outputDir(), `vigia-dashboard-${date}.html`);
+}
+
+async function updateUnifiedDashboard(rules, sessionLabel) {
+  const date = todayET();
+  const watchlist = rules.watchlist || [];
+  const premarketData = loadPremarketData(date);
+  const signals = readTodaySignals();
+
+  const fe = fundamentals.getFedEarnings();
+  const news = {};
+  for (const symbol of watchlist) {
+    news[symbol] = await fundamentals.getNews(symbol);
+  }
+  const fundamentalsView = {
+    fedDate: fundamentals.getFedDate(),
+    fedActive: fe?.fed?.active ?? false,
+    earnings: Object.fromEntries(watchlist.map((s) => [s, fundamentals.getEarnings(s)])),
+    news,
+  };
+  const fedWarning = fundamentalsView.fedActive ? `FED activo (${fundamentalsView.fedDate})` : null;
+
+  const html = renderUnifiedDashboard({ date, sessionLabel, fedWarning, premarketData, signals, fundamentals: fundamentalsView });
+  try {
+    writeFileSync(dashboardHtmlPath(date), html, "utf8");
+  } catch (e) {
+    console.warn("[VIGIA] ⚠️ No se pudo escribir el dashboard unificado:", e.message);
+  }
 }
 
 // ─── Email (optional — configure NODEMAILER_* in .env) ───────────────────────
@@ -448,6 +508,8 @@ async function tick(rules) {
     wasInSession = false;
     tickCount = 0;
     warmedUpToday = false;
+    fundamentals.resetDaily();
+    await fundamentals.warmup(watchlist, rules);
     console.log(`\n[VIGIA] 📅 Nuevo día (${today}) — estado reiniciado`);
   }
   lastTickDay = today;
@@ -518,7 +580,7 @@ async function tick(rules) {
       }
 
       const candidates = screenStrategies(price, tfData, tickBarTime);
-      const vetoFlags  = buildVetoFlags(rules, symbol);
+      const vetoFlags  = buildVetoFlags(symbol);
 
       for (const cand of candidates) {
         if (shouldFire(symbol, cand)) {
@@ -540,6 +602,9 @@ async function tick(rules) {
   }
 
   await flushEmailBuffer();
+
+  const nowET = new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: false });
+  await updateUnifiedDashboard(rules, `ABIERTO · ${nowET} ET`);
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -564,6 +629,12 @@ async function main() {
 
   if (paperEnabled) reportStartupState();
 
+  // D3: FED/earnings 1x por sesión — antes del primer tick para que
+  // buildVetoFlags() tenga datos desde la primera señal.
+  console.log("  Fundamentals: cargando FED/earnings (Finviz)...");
+  const fe = await fundamentals.warmup(rules.watchlist || [], rules);
+  console.log(fe ? "  Fundamentals: ✅ listo" : "  Fundamentals: ⚠️ falló, sin datos hasta el próximo día");
+
   // First tick immediately (forces full scan)
   await tick(rules);
 
@@ -579,7 +650,13 @@ async function main() {
   });
 }
 
-main().catch((err) => {
-  console.error("[VIGIA] ❌ Error fatal:", err.message);
-  process.exit(1);
-});
+// Solo auto-arrancar cuando se ejecuta directamente (`node watcher.js` /
+// `npm run watcher`) — NO cuando otro módulo (ej. un test) hace `import` de
+// funciones puras como buildVetoFlags(). Comparación por path resuelto
+// (no por string de URL) para que funcione igual en Windows y POSIX.
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
+  main().catch((err) => {
+    console.error("[VIGIA] ❌ Error fatal:", err.message);
+    process.exit(1);
+  });
+}

@@ -791,9 +791,50 @@ export function generateHtml(briefData, date) {
 </html>`;
 }
 
+/**
+ * Normaliza el output crudo de morning_brief a un contrato explícito y estable,
+ * para que dashboard.js (proceso separado, corre horas después) no dependa de la
+ * forma interna de runBrief()/generateHtml(). No hay campo "score" numérico en
+ * morning_brief hoy — el 0-100% del checklist lo calcula Claude en el chat y solo
+ * queda en el .md. Aquí se deriva una clasificación por tier (ejecutar/vigilar/
+ * no_operar) con la misma regla que ya usa generateHtml() para las 3 secciones
+ * del briefing (conditions_met > setup_forming > ninguno).
+ */
+export function normalizePremarketData(briefObj) {
+  const symbols = briefObj?.symbols_scanned || [];
+  return {
+    generated_at: briefObj?.generated_at || new Date().toISOString(),
+    fundamental_filters: briefObj?.fundamental_filters || null,
+    tickers: symbols.map((sym) => {
+      const cands = sym.strategy_candidates || [];
+      const metCands = cands.filter((c) => c.confidence === "conditions_met");
+      const formingCands = cands.filter((c) => c.confidence === "setup_forming");
+      const classification = metCands.length ? "ejecutar" : formingCands.length ? "vigilar" : "no_operar";
+
+      return {
+        symbol: sym.symbol,
+        price: sym.quote?.last ?? sym.quote?.close ?? null,
+        classification,
+        timeframes: {
+          D1: { bb: sym.timeframes?.D1?.bb ?? null, ma_order: sym.timeframes?.D1?.ma_order ?? null },
+          H1: { bb: sym.timeframes?.H1?.bb ?? null, ma_order: sym.timeframes?.H1?.ma_order ?? null },
+          M15: { bb: sym.timeframes?.M15?.bb ?? null, ma_order: sym.timeframes?.M15?.ma_order ?? null },
+        },
+        candidates: cands.map((c) => ({
+          id: c.id,
+          position: c.position,
+          confidence: c.confidence,
+          note: c.note || "",
+        })),
+      };
+    }),
+  };
+}
+
 /** Save the full premarket checklist report as markdown in docs/sessions/ inside the repo.
  *  Also saves to Neon (premarket_sessions table) if DATABASE_URL is configured.
- *  If brief_data (JSON string of morning_brief output) is provided, also generates an HTML dashboard. */
+ *  If brief_data (JSON string of morning_brief output) is provided, also generates an HTML dashboard
+ *  and a normalized premarket-YYYY-MM-DD.json for the unified dashboard (dashboard.js) to read. */
 export async function savePremarketReport({ content, date, brief_data } = {}) {
   if (!content || typeof content !== "string") {
     throw new Error("content is required and must be a string.");
@@ -808,6 +849,7 @@ export async function savePremarketReport({ content, date, brief_data } = {}) {
   writeFileSync(mdPath, content, "utf8");
 
   let htmlPath = null;
+  let jsonPath = null;
   let briefObj = null;
   if (brief_data) {
     try {
@@ -817,6 +859,14 @@ export async function savePremarketReport({ content, date, brief_data } = {}) {
       writeFileSync(htmlPath, html, "utf8");
     } catch (e) {
       // HTML generation is non-fatal — md already saved
+    }
+    try {
+      const normalized = normalizePremarketData(briefObj);
+      jsonPath = join(sessionsDir, `premarket-${dateStr}.json`);
+      writeFileSync(jsonPath, JSON.stringify(normalized, null, 2), "utf8");
+    } catch (e) {
+      // JSON normalization is non-fatal — md/html already saved (dashboard.js
+      // degrades gracefully to "sin checklist hoy" when the file is missing)
     }
   }
 
@@ -854,6 +904,7 @@ export async function savePremarketReport({ content, date, brief_data } = {}) {
     success: true,
     path: mdPath,
     html_path: htmlPath,
+    json_path: jsonPath,
     date: dateStr,
     neon: sbResult,
     signals: signalsResult,

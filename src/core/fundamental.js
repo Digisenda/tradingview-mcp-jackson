@@ -21,7 +21,7 @@ const ETF_SYMBOLS = new Set(["SPY", "QQQ", "IWM", "DIA", "GLD", "TLT", "XLF", "X
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
-function fetchHtml(url, timeoutMs = 6000) {
+export function fetchHtml(url, timeoutMs = 6000) {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
     get(url, { headers: HEADERS }, (res) => {
@@ -40,7 +40,7 @@ function fetchHtml(url, timeoutMs = 6000) {
 // ─── Date helpers ─────────────────────────────────────────────────────────────
 
 /** "Jul 29 AMC" → "2026-07-29"  (assumes current year, bumps to next if past) */
-function parseFinvizDate(raw, today = new Date()) {
+export function parseFinvizDate(raw, today = new Date()) {
   const m = raw.trim().match(/^([A-Za-z]{3})\s+(\d{1,2})/);
   if (!m) return null;
   const month = MONTHS[m[1]];
@@ -57,47 +57,52 @@ function parseFinvizDate(raw, today = new Date()) {
 }
 
 /** Calendar days between isoDate and today (negative = past) */
-function daysDiff(isoDate, today = new Date()) {
+export function daysDiff(isoDate, today = new Date()) {
   const t = new Date(isoDate);
   const d = new Date(today.toISOString().split("T")[0]);
   return Math.round((t - d) / 864e5);
 }
 
 // ─── Finviz scrapers ──────────────────────────────────────────────────────────
+//
+// Finviz retired the old /quote.ashx and /calendar.ashx URLs and redesigned
+// both pages' markup (2026-06/07). Both old URLs now chain THROUGH multiple
+// 301s (.ashx → /quote?t=X → /stock?t=X ; .ashx → /calendar → /calendar/economic)
+// — fetchHtml() does not follow redirects, so these must be the final URLs,
+// not just the first Location header. The earnings snapshot table moved to a
+// class-based layout; the calendar page now embeds its event list as inline
+// JSON (`{"calendarId":...}` objects) — more reliable to parse than the old
+// HTML table scrape. Verified against the live pages 2026-07-01.
 
 async function scrapeEarnings(symbol) {
-  const html = await fetchHtml(`https://finviz.com/quote.ashx?t=${symbol}`);
-  // The earnings cell sits right after the "Earnings" label cell
-  const m = html.match(/Earnings<\/b><\/td>\s*<td[^>]*>\s*([-A-Za-z0-9 ]+?)\s*<\/td>/i);
+  const html = await fetchHtml(`https://finviz.com/stock?t=${symbol}`);
+  // "Earnings" label cell closes, then the value sits inside
+  // <div class="snapshot-td-content"><a...><b><small class="text-2xs">May 20 AMC</small>
+  const m = html.match(/Earnings<\/a><\/div><\/td>[\s\S]{0,400}?<small class="text-2xs">([^<]+)<\/small>/);
   if (!m) return null;
   const raw = m[1].trim();
   if (raw === "-" || raw.toUpperCase() === "N/A") return null;
   return raw;
 }
 
-async function scrapeCalendarFedEvents(today = new Date()) {
-  const html = await fetchHtml("https://finviz.com/calendar.ashx");
+async function scrapeCalendarFedEvents() {
+  const html = await fetchHtml("https://finviz.com/calendar/economic");
 
-  // Rows look like: <tr ...><td ...>May 28</td> ... FOMC ... </tr>
-  // Collect all text nodes near FOMC/Fed references
-  const events = [];
+  // Events are embedded as flat (no nested braces) JSON objects, e.g.:
+  // {"calendarId":420648,"ticker":"FDTR","event":"Fed Interest Rate Decision",
+  //  "category":"Interest Rate","date":"2026-07-01T09:00:00", ...}
+  // Note: the default page only renders ~1 week of events — farther-out FOMC
+  // dates rely on the rules.json fallback merge in checkFundamentals() below.
+  const raw = html.match(/\{"calendarId":\d+[^}]*\}/g) || [];
   const fedRe = /FOMC|Fed Funds|Federal Reserve|Interest Rate Decision/i;
+  const events = [];
 
-  // Split by <tr to process row by row
-  const rows = html.split(/<tr[\s>]/i);
-  let lastDate = null;
-
-  for (const row of rows) {
-    // Try to pull a date from this row
-    const dateMatch = row.match(/([A-Za-z]{3})\s+(\d{1,2})/);
-    if (dateMatch) {
-      const candidate = parseFinvizDate(dateMatch[0], today);
-      if (candidate) lastDate = candidate;
-    }
-    if (fedRe.test(row) && lastDate) {
-      // Extract event name — strip tags
-      const name = row.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 80);
-      events.push({ date: lastDate, event: name });
+  for (const chunk of raw) {
+    let obj;
+    try { obj = JSON.parse(chunk); } catch { continue; }
+    if (!obj.event || !obj.date) continue;
+    if (fedRe.test(obj.event)) {
+      events.push({ date: obj.date.split("T")[0], event: obj.event.slice(0, 80) });
     }
   }
 
@@ -121,7 +126,7 @@ export async function checkFundamentals(symbols = [], rules = {}) {
 
   // 1. Try Finviz calendar
   try {
-    const live = await scrapeCalendarFedEvents(today);
+    const live = await scrapeCalendarFedEvents();
     fedEvents = live;
   } catch (_) {
     // Finviz unreachable — proceed with rules.json fallback
