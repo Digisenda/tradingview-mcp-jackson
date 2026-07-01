@@ -111,12 +111,17 @@ function todayET() {
 // de fundamental.js, con fallback a rules.json ya incorporado ahí). Antes esta
 // función leía rules.fundamental_filters directo, duplicando (peor, sin scrape
 // en vivo) la misma lógica que ya usaba morning.js — backlog #9.
+// FED: confía en fe.fed.active/activeEvent (calculados una sola vez en
+// fundamental.js) en vez de recalcular el umbral ±2 días aquí — antes esta
+// función tenía su propia copia del umbral y podía desincronizarse del
+// booleano que ya usa updateUnifiedDashboard() para el banner del dashboard.
 export function buildVetoFlags(ticker) {
   const flags = [];
   const fe = fundamentals.getFedEarnings();
 
-  const fedEvent = fe?.fed?.upcoming?.find((e) => Math.abs(e.days_away) <= 2);
-  if (fedEvent) flags.push(`FED ${fedEvent.date}`);
+  if (fe?.fed?.active && fe.fed.activeEvent) {
+    flags.push(`FED ${fe.fed.activeEvent.date}`);
+  }
 
   const earn = fe?.earnings?.[ticker];
   if (earn?.active) flags.push(`EARNINGS ${earn.date}`);
@@ -305,23 +310,34 @@ function updateSignalsHtml() {
 // ─── Dashboard unificado (T6 — genera EN PARALELO a signals-*.html/premarket-*.html
 // durante la semana de validación en vivo; D5, backlog #6) ────────────────────
 
-let _premarketDataCache; // undefined = no leído aún hoy, null = no existe/falló, objeto = ok
+// undefined = todavía no encontrado hoy (reintenta en la próxima llamada);
+// objeto = encontrado y cacheado por el resto del día. NUNCA se cachea `null`
+// de forma permanente — si el checklist premercado se corre DESPUÉS de que el
+// vigía ya arrancó, la próxima llamada (siguiente tick, ~30s) debe recogerlo,
+// no quedarse pegada en "sin checklist hoy" el resto de la sesión.
+let _premarketDataCache;
 let _premarketDataDay = null;
 
-/** Lee premarket-YYYY-MM-DD.json (escrito por morning.js, T1) una vez por día. */
-function loadPremarketData(dateStr) {
-  if (_premarketDataDay === dateStr && _premarketDataCache !== undefined) {
-    return _premarketDataCache;
+/** Lee premarket-YYYY-MM-DD.json (escrito por morning.js, T1). Reintenta cada
+ *  llamada hasta encontrarlo; una vez encontrado, cachea por el resto del día. */
+export function loadPremarketData(dateStr) {
+  if (_premarketDataDay !== dateStr) {
+    _premarketDataDay = dateStr;
+    _premarketDataCache = undefined;
   }
-  _premarketDataDay = dateStr;
+  if (_premarketDataCache !== undefined) return _premarketDataCache;
+
   try {
     const p = join(weekDirFor(dateStr), `premarket-${dateStr}.json`);
-    _premarketDataCache = existsSync(p) ? JSON.parse(readFileSync(p, "utf8")) : null;
+    if (existsSync(p)) {
+      _premarketDataCache = JSON.parse(readFileSync(p, "utf8"));
+    }
+    // si no existe todavía, _premarketDataCache queda undefined → reintenta
+    // en la próxima llamada en vez de fijarse en "no existe" para siempre
   } catch (e) {
-    console.warn("[VIGIA] ⚠️ No se pudo leer premarket JSON:", e.message);
-    _premarketDataCache = null;
+    console.warn("[VIGIA] ⚠️ No se pudo leer premarket JSON, se reintentará:", e.message);
   }
-  return _premarketDataCache;
+  return _premarketDataCache ?? null;
 }
 
 function dashboardHtmlPath(date) {
@@ -335,10 +351,13 @@ export async function updateUnifiedDashboard(rules, sessionLabel) {
   const signals = readTodaySignals();
 
   const fe = fundamentals.getFedEarnings();
-  const news = {};
-  for (const symbol of watchlist) {
-    news[symbol] = await fundamentals.getNews(symbol);
-  }
+  // Paralelo, no secuencial — cada símbolo es un fetch de Finviz independiente.
+  // Secuencial aquí (hasta 6s de timeout × N símbolos) podía empujar un tick
+  // completo más allá de los 30s de TICK_MS y solaparse con el siguiente.
+  const newsEntries = await Promise.all(
+    watchlist.map(async (symbol) => [symbol, await fundamentals.getNews(symbol)])
+  );
+  const news = Object.fromEntries(newsEntries);
   const fundamentalsView = {
     fedDate: fundamentals.getFedDate(),
     fedActive: fe?.fed?.active ?? false,
@@ -545,6 +564,11 @@ async function tick(rules) {
   }
   wasInSession = true;
 
+  // Reintenta warmup() si el de hoy falló por algo no relacionado a red (ej.
+  // rules.json malformado) — no-op barato (solo chequea 2 valores) el resto
+  // de las veces gracias al cooldown interno de ensureWarmedUp().
+  await fundamentals.ensureWarmedUp(watchlist, rules);
+
   tickCount++;
   // Skip the forced tick-1 refresh if the warmup pass already populated tfCache today.
   const doRefresh = tickCount % REFRESH_EVERY === 1 && !(tickCount === 1 && warmedUpToday);
@@ -607,6 +631,28 @@ async function tick(rules) {
   await updateUnifiedDashboard(rules, `ABIERTO · ${nowET} ET`);
 }
 
+// Guardia de reentrancia — con el fetch de noticias en paralelo (arriba) un tick
+// difícilmente supera los 30s de TICK_MS, pero si pasa (Finviz lento, watchlist
+// grande), esto evita que dos tick() muten tfCache/firedSignals/lastKnownPrices
+// a la vez. También cubre el primer tick de main() (antes sin protección: una
+// excepción ahí tumbaba el proceso entero antes de que existiera el setInterval).
+let _tickRunning = false;
+
+async function runTick(rules) {
+  if (_tickRunning) {
+    console.warn("[VIGIA] ⏭️ Tick anterior aún en curso — se salta este disparo para evitar solape");
+    return;
+  }
+  _tickRunning = true;
+  try {
+    await tick(rules);
+  } catch (err) {
+    console.error("[VIGIA] ❌ Error en tick:", err.message);
+  } finally {
+    _tickRunning = false;
+  }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 async function main() {
@@ -636,12 +682,9 @@ async function main() {
   console.log(fe ? "  Fundamentals: ✅ listo" : "  Fundamentals: ⚠️ falló, sin datos hasta el próximo día");
 
   // First tick immediately (forces full scan)
-  await tick(rules);
+  await runTick(rules);
 
-  const interval = setInterval(async () => {
-    try { await tick(rules); }
-    catch (err) { console.error("[VIGIA] ❌ Error en tick:", err.message); }
-  }, TICK_MS);
+  const interval = setInterval(() => { runTick(rules); }, TICK_MS);
 
   process.on("SIGINT", () => {
     console.log("\n[VIGIA] Detenido.");

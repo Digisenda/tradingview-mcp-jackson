@@ -18,7 +18,7 @@ await mock.module("../src/core/fundamental.js", {
   },
 });
 
-const { warmup, getFedEarnings, getFedDate, getEarnings, getNews, resetDaily } =
+const { warmup, ensureWarmedUp, getFedEarnings, getFedDate, getEarnings, getNews, resetDaily } =
   await import("../src/core/fundamentals.js");
 
 function newsHtml(pairs) {
@@ -36,7 +36,7 @@ function newsHtml(pairs) {
 test("warmup: éxito — getFedEarnings/getFedDate/getEarnings reflejan el resultado", async () => {
   resetDaily();
   checkFundamentalsImpl = async () => ({
-    fed: { active: true, upcoming: [{ date: "2026-07-03", event: "FOMC" }] },
+    fed: { active: true, upcoming: [{ date: "2026-07-03", event: "FOMC", days_away: 1 }] },
     earnings: { NVDA: { date: "2026-08-20", active: false, days_away: 50 } },
   });
   const result = await warmup(["NVDA"], {});
@@ -47,7 +47,7 @@ test("warmup: éxito — getFedEarnings/getFedDate/getEarnings reflejan el resul
 
 test("warmup: falla → getFedEarnings() conserva el último valor bueno, no lanza", async () => {
   resetDaily();
-  checkFundamentalsImpl = async () => ({ fed: { active: false, upcoming: [{ date: "2026-07-10", event: "FOMC" }] }, earnings: {} });
+  checkFundamentalsImpl = async () => ({ fed: { active: false, upcoming: [{ date: "2026-07-10", event: "FOMC", days_away: 5 }] }, earnings: {} });
   await warmup(["NVDA"], {});
   assert.strictEqual(getFedDate(), "2026-07-10");
 
@@ -62,6 +62,79 @@ test("warmup: falla en el primer intento del día → getFedDate() es null, no l
   await assert.doesNotReject(warmup(["NVDA"], {}));
   assert.strictEqual(getFedDate(), null);
   assert.strictEqual(getEarnings("NVDA"), null);
+});
+
+test("getFedDate: ignora un evento FED que ya pasó (days_away negativo) y devuelve el genuinamente futuro", async () => {
+  resetDaily();
+  checkFundamentalsImpl = async () => ({
+    fed: {
+      active: true,
+      // orden ascendente real de checkFundamentals(): el pasado (-1) va primero
+      upcoming: [
+        { date: "2026-06-30", event: "FOMC pasado", days_away: -1 },
+        { date: "2026-08-15", event: "FOMC futuro", days_away: 45 },
+      ],
+    },
+    earnings: {},
+  });
+  await warmup(["NVDA"], {});
+  assert.strictEqual(getFedDate(), "2026-08-15", "no debe devolver la reunión que ya pasó");
+});
+
+test("getFedDate: solo hay un evento pasado (-2) → devuelve null, no lo muestra como 'próximo'", async () => {
+  resetDaily();
+  checkFundamentalsImpl = async () => ({
+    fed: { active: false, upcoming: [{ date: "2026-06-29", event: "FOMC pasado", days_away: -2 }] },
+    earnings: {},
+  });
+  await warmup(["NVDA"], {});
+  assert.strictEqual(getFedDate(), null);
+});
+
+// ─── ensureWarmedUp — reintento con cooldown si warmup() falló ─────────────────
+
+test("ensureWarmedUp: si ya hay datos buenos, no vuelve a llamar checkFundamentals", async () => {
+  resetDaily();
+  checkFundamentalsImpl = async () => ({ fed: { active: false, upcoming: [] }, earnings: {} });
+  await warmup(["NVDA"], {});
+  mockCheckFundamentals.mock.resetCalls();
+
+  await ensureWarmedUp(["NVDA"], {});
+  assert.strictEqual(mockCheckFundamentals.mock.calls.length, 0, "ya estaba warmed up, no debe reintentar");
+});
+
+test("ensureWarmedUp: si warmup falló, reintenta (fuera del cooldown) hasta tener éxito", async (t) => {
+  resetDaily();
+  // Reloj mockeado ANTES del primer warmup(), para que _lastWarmupAttempt se
+  // grabe con el mismo reloj que luego avanzamos con tick() — si se habilita
+  // después, el mock reinicia el epoch y la resta de tiempos queda negativa.
+  t.mock.timers.enable({ apis: ["Date"] });
+
+  checkFundamentalsImpl = async () => { throw new Error("falla inicial"); };
+  await warmup(["NVDA"], {});
+  assert.strictEqual(getFedEarnings(), null);
+
+  t.mock.timers.tick(11 * 60 * 1000); // pasa el cooldown de 10 min
+
+  checkFundamentalsImpl = async () => ({ fed: { active: false, upcoming: [] }, earnings: {} });
+  const result = await ensureWarmedUp(["NVDA"], {});
+  assert.notStrictEqual(result, null, "debe reintentar y esta vez tener éxito");
+  assert.notStrictEqual(getFedEarnings(), null);
+});
+
+test("ensureWarmedUp: dentro del cooldown, NO reintenta (evita machacar Finviz)", async (t) => {
+  resetDaily();
+  t.mock.timers.enable({ apis: ["Date"] });
+
+  checkFundamentalsImpl = async () => { throw new Error("falla inicial"); };
+  await warmup(["NVDA"], {});
+
+  t.mock.timers.tick(2 * 60 * 1000); // dentro del cooldown de 10 min
+
+  mockCheckFundamentals.mock.resetCalls();
+  const result = await ensureWarmedUp(["NVDA"], {});
+  assert.strictEqual(result, null);
+  assert.strictEqual(mockCheckFundamentals.mock.calls.length, 0, "no debe reintentar dentro del cooldown");
 });
 
 // ─── getNews — TTL 15 min, degradación graceful ────────────────────────────────

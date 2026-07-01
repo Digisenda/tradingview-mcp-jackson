@@ -132,12 +132,19 @@ export async function checkFundamentals(symbols = [], rules = {}) {
     // Finviz unreachable — proceed with rules.json fallback
   }
 
-  // 2. Merge rules.json fed_dates fallback (avoid duplicates)
-  const seenDates = new Set(fedEvents.map((e) => e.date));
-  for (const d of rf.fed_dates || []) {
-    if (!seenDates.has(d)) {
-      fedEvents.push({ date: d, event: "FOMC Meeting", source: "rules.json" });
+  // 2. Merge rules.json fed_dates fallback (avoid duplicates). Guarded on its own —
+  // this reads user-edited config (not a network call), so a malformed fed_dates
+  // (e.g. an object instead of an array, from a hand-edit typo) must not throw
+  // uncaught out of checkFundamentals() and silence the veto for the caller.
+  try {
+    const seenDates = new Set(fedEvents.map((e) => e.date));
+    for (const d of rf.fed_dates || []) {
+      if (!seenDates.has(d)) {
+        fedEvents.push({ date: d, event: "FOMC Meeting", source: "rules.json" });
+      }
     }
+  } catch (e) {
+    console.warn("[FUNDAMENTAL] ⚠️ fed_dates fallback malformado, se ignora:", e.message);
   }
 
   // Classify FED events
@@ -146,7 +153,11 @@ export async function checkFundamentals(symbols = [], rules = {}) {
     .filter((e) => e.days_away >= -2 && e.days_away <= 30)
     .sort((a, b) => a.days_away - b.days_away);
 
-  const fedActive = fedUpcoming.some((e) => Math.abs(e.days_away) <= 2);
+  // Single source of truth for "which event made FED active" — buildVetoFlags()
+  // in watcher.js reuses fed.activeEvent instead of re-deriving the ±2 day
+  // threshold itself, so the two can never silently disagree.
+  const fedActiveEvent = fedUpcoming.find((e) => Math.abs(e.days_away) <= 2) || null;
+  const fedActive = fedActiveEvent != null;
 
   // ── EARNINGS ──────────────────────────────────────────────────────────────
   const earnings = {};
@@ -191,10 +202,12 @@ export async function checkFundamentals(symbols = [], rules = {}) {
 
   // ── Warnings ──────────────────────────────────────────────────────────────
   const warnings = [];
-  if (fedActive) {
-    const next = fedUpcoming.find((e) => Math.abs(e.days_away) <= 2);
+  if (fedActiveEvent) {
+    const daysLabel = fedActiveEvent.days_away >= 0
+      ? `en ${fedActiveEvent.days_away} días`
+      : `hace ${Math.abs(fedActiveEvent.days_away)} días`;
     warnings.push(
-      `⚠️ FILTRO FED ACTIVO — evento "${next?.event}" el ${next?.date} (${next?.days_away >= 0 ? "en " + next.days_away : "hace " + Math.abs(next.days_away)} días). Considerar NO operar hoy.`,
+      `⚠️ FILTRO FED ACTIVO — evento "${fedActiveEvent.event}" el ${fedActiveEvent.date} (${daysLabel}). Considerar NO operar hoy.`,
     );
   }
   for (const [sym, data] of Object.entries(earnings)) {
@@ -210,6 +223,7 @@ export async function checkFundamentals(symbols = [], rules = {}) {
     checked_at: today.toISOString().split("T")[0],
     fed: {
       active: fedActive,
+      activeEvent: fedActiveEvent,
       upcoming: fedUpcoming,
     },
     earnings,

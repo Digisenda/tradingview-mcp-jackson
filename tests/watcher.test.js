@@ -21,8 +21,9 @@ await mock.module("../src/core/fundamentals.js", {
 const { buildVetoFlags, isInSessionWindow, isInWarmupWindow } = await import("../watcher.js");
 
 test("buildVetoFlags: FED dentro de ±2 días → incluye flag FED con la fecha", () => {
+  const event = { date: "2026-07-03", event: "FOMC", days_away: 1 };
   fedEarnings = {
-    fed: { active: true, upcoming: [{ date: "2026-07-03", event: "FOMC", days_away: 1 }] },
+    fed: { active: true, activeEvent: event, upcoming: [event] },
     earnings: {},
   };
   const flags = buildVetoFlags("NVDA");
@@ -66,8 +67,9 @@ test("buildVetoFlags: earnings de OTRO ticker no contamina el chequeado", () => 
 });
 
 test("buildVetoFlags: FED + earnings activos a la vez → ambos flags", () => {
+  const event = { date: "2026-07-02", event: "FOMC", days_away: 0 };
   fedEarnings = {
-    fed: { active: true, upcoming: [{ date: "2026-07-02", event: "FOMC", days_away: 0 }] },
+    fed: { active: true, activeEvent: event, upcoming: [event] },
     earnings: { NVDA: { date: "2026-07-05", active: true, days_away: 4 } },
   };
   const flags = buildVetoFlags("NVDA");
@@ -78,6 +80,29 @@ test("buildVetoFlags: sin datos de fundamentals (warmup no corrió / falló) →
   fedEarnings = null;
   assert.doesNotThrow(() => buildVetoFlags("NVDA"));
   assert.deepStrictEqual(buildVetoFlags("NVDA"), []);
+});
+
+test("buildVetoFlags: confía en fe.fed.active de fundamental.js, no recalcula su propio umbral (fix #6)", () => {
+  // Simula que fundamental.js cambió su umbral de FED (ej. a ±3 días) — un
+  // evento con days_away=3 que un ±2 hardcodeado en watcher.js NO detectaría
+  // por su cuenta. Si buildVetoFlags confía en fe.fed.active/activeEvent (como
+  // debe), el flag aparece igual — antes de este fix, se habría perdido.
+  const event = { date: "2026-07-04", event: "FOMC", days_away: 3 };
+  fedEarnings = {
+    fed: { active: true, activeEvent: event, upcoming: [event] }, // active=true decidido por fundamental.js
+    earnings: {},
+  };
+  const flags = buildVetoFlags("NVDA");
+  assert.deepStrictEqual(flags, ["FED 2026-07-04"], "debe mostrar el flag aunque days_away=3 no pase un ±2 hardcodeado");
+});
+
+test("buildVetoFlags: active=false → sin flag FED aunque haya un upcoming[] con eventos", () => {
+  fedEarnings = {
+    fed: { active: false, activeEvent: null, upcoming: [{ date: "2026-08-01", event: "FOMC", days_away: 30 }] },
+    earnings: {},
+  };
+  const flags = buildVetoFlags("NVDA");
+  assert.deepStrictEqual(flags, []);
 });
 
 // ─── isInSessionWindow — límite ampliado a 16:00 ET (horario completo de mercado) ──

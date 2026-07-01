@@ -26,6 +26,12 @@ const CONF_CLASS = { conditions_met: "met", setup_forming: "forming", watch: "wa
 // ─── Zona 2: scorecard premercado ──────────────────────────────────────────────
 
 function renderTickerCard(ticker) {
+  // Guard contra un elemento null/parcial en el array (ej. morning.js a mitad
+  // de escribir el JSON mientras el vigía lo lee) — degrada a placeholder en
+  // vez de lanzar y tumbar todo el render del dashboard.
+  if (!ticker || typeof ticker !== "object") {
+    return `<div class="ticker-card"><div class="placeholder">Ticker con datos incompletos</div></div>`;
+  }
   const cls = CLASSIFICATION_CLASS[ticker.classification] || "watch";
   const label = CLASSIFICATION_LABEL[ticker.classification] || "—";
   const bbMid = ticker.timeframes?.D1?.bb?.middle ?? ticker.timeframes?.D1?.bb?.basis;

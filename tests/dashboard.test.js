@@ -84,3 +84,21 @@ test("renderUnifiedDashboard: clasificación no_operar sin candidatos no lanza",
   assert.match(html, /TSLA/);
   assert.match(html, /NO OPERAR/);
 });
+
+test("renderUnifiedDashboard: un elemento null/parcial en tickers (escritura concurrente a mitad) no lanza", () => {
+  // Regresión de /code-review: morning.js escribiendo el JSON a mitad mientras
+  // el vigía lo lee podía dejar un elemento null/incompleto en el array.
+  assert.doesNotThrow(() => {
+    const html = renderUnifiedDashboard({
+      ...baseArgs,
+      premarketData: {
+        tickers: [
+          null,
+          { symbol: "NVDA", price: 195.07, classification: "ejecutar", timeframes: {}, candidates: [] },
+          undefined,
+        ],
+      },
+    });
+    assert.match(html, /NVDA/, "el ticker válido sigue renderizando aunque haya vecinos rotos");
+  });
+});

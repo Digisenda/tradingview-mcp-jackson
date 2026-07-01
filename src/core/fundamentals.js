@@ -11,14 +11,17 @@
 import { checkFundamentals, fetchHtml } from "./fundamental.js";
 
 const NEWS_TTL_MS = 15 * 60 * 1000;
+const WARMUP_RETRY_COOLDOWN_MS = 10 * 60 * 1000; // no reintentar más seguido que esto
 
 let _fedEarnings = null; // último resultado bueno de checkFundamentals()
+let _lastWarmupAttempt = 0;
 const _newsCache = new Map(); // symbol → { items, fetchedAt }
 
-// ─── FED / Earnings — 1x por sesión ────────────────────────────────────────────
+// ─── FED / Earnings — 1x por sesión, con auto-reintento si falló ──────────────
 
 /** Llamar una vez al arrancar el vigía (o al detectar un nuevo día de sesión). */
 export async function warmup(watchlist, rules) {
+  _lastWarmupAttempt = Date.now();
   try {
     _fedEarnings = await checkFundamentals(watchlist, rules);
   } catch (e) {
@@ -28,15 +31,33 @@ export async function warmup(watchlist, rules) {
   return _fedEarnings;
 }
 
+/**
+ * Llamar en cada tick en sesión. Si warmup() nunca tuvo éxito hoy (ej. falló por
+ * algo no relacionado a red, no solo un Finviz caído), reintenta con un cooldown
+ * de 10 min en vez de esperar hasta el rollover del día siguiente — cierra el
+ * hallazgo de /code-review "veto vacío todo el día sin reintento".
+ */
+export async function ensureWarmedUp(watchlist, rules) {
+  if (_fedEarnings !== null) return _fedEarnings;
+  if (Date.now() - _lastWarmupAttempt < WARMUP_RETRY_COOLDOWN_MS) return null;
+  return warmup(watchlist, rules);
+}
+
 /** Último resultado de checkFundamentals() cacheado por warmup(). Nunca lanza. */
 export function getFedEarnings() {
   return _fedEarnings;
 }
 
-/** Fecha de la próxima reunión FED (ISO, o null) — usado por buildVetoFlags(). */
+/**
+ * Fecha de la próxima reunión FED genuinamente futura (ISO, o null) — usado por
+ * el dashboard bajo la etiqueta "Próx. FED". `upcoming` incluye eventos de hasta
+ * 2 días en el pasado (para que el veto los detecte justo después de ocurrir);
+ * filtrar days_away >= 0 evita mostrar una reunión ya pasada como "próxima".
+ */
 export function getFedDate() {
   const upcoming = _fedEarnings?.fed?.upcoming || [];
-  return upcoming.length ? upcoming[0].date : null;
+  const future = upcoming.find((e) => e.days_away >= 0);
+  return future ? future.date : null;
 }
 
 /** Info de earnings para un símbolo — { date, active, days_away } o null. */
