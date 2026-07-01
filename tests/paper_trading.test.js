@@ -311,6 +311,96 @@ describe("onSessionEnd — position expiry", () => {
     await onSessionEnd("NVDA", 900.00);
     assert.equal(loadOpenPositions().length, before, "no-op when no positions");
   });
+
+  test("onSessionEnd holds overnight a STRAT-12 position (exit_override.sell_at_market_open=false)", async () => {
+    openPosition({
+      id: "OVERNIGHT-TEST-NVDA-CALL",
+      ticker: "NVDA",
+      strategy_id: "STRAT-12",
+      side: "CALL",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 195.00,
+      veto_flags: [],
+    });
+
+    const rules = {
+      strategies: [
+        { id: "STRAT-12", exit_override: { sell_at_market_open: false } },
+      ],
+    };
+
+    await onSessionEnd("NVDA", 196.00, rules);
+
+    assert.ok(
+      loadOpenPositions().find((p) => p.id === "OVERNIGHT-TEST-NVDA-CALL"),
+      "STRAT-12 position should remain open across session end"
+    );
+
+    const jsonlFiles = readdirSync(TEST_DIR).filter((f) => f.endsWith(".jsonl"));
+    const anyExpiredOvernight = jsonlFiles.some((f) => {
+      const content = readFileSync(join(TEST_DIR, f), "utf8");
+      return content.includes("OVERNIGHT-TEST-NVDA-CALL");
+    });
+    assert.equal(anyExpiredOvernight, false, "overnight position should not appear in any closed-trade JSONL");
+  });
+
+  test("onSessionEnd closes a normal position but holds a STRAT-12 one for the same ticker", async () => {
+    openPosition({
+      id: "MIXED-TEST-NVDA-CALL",
+      ticker: "NVDA",
+      strategy_id: "STRAT-12",
+      side: "CALL",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 195.00,
+      veto_flags: [],
+    });
+    openPosition({
+      id: "MIXED-TEST-NVDA-PUT",
+      ticker: "NVDA",
+      strategy_id: "STRAT-01",
+      side: "PUT",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 195.00,
+      veto_flags: [],
+    });
+
+    const rules = {
+      strategies: [
+        { id: "STRAT-12", exit_override: { sell_at_market_open: false } },
+        { id: "STRAT-01" },
+      ],
+    };
+
+    await onSessionEnd("NVDA", 196.00, rules);
+
+    const open = loadOpenPositions();
+    assert.ok(open.find((p) => p.id === "MIXED-TEST-NVDA-CALL"), "STRAT-12 position stays open");
+    assert.equal(open.find((p) => p.id === "MIXED-TEST-NVDA-PUT"), undefined, "STRAT-01 position closes normally");
+  });
+
+  test("onSessionEnd closes a STRAT-12 position anyway if rules is missing/malformed (fail-safe default)", async () => {
+    openPosition({
+      id: "FAILSAFE-TEST-NVDA-CALL",
+      ticker: "NVDA",
+      strategy_id: "STRAT-12",
+      side: "CALL",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 195.00,
+      veto_flags: [],
+    });
+
+    await onSessionEnd("NVDA", 196.00); // no rules passed
+
+    assert.equal(
+      loadOpenPositions().find((p) => p.id === "FAILSAFE-TEST-NVDA-CALL"),
+      undefined,
+      "without rules, an unrecognized strategy_id falls back to the safe default (expire)"
+    );
+  });
 });
 
 // ─── enabled=false guard (simulates watcher behavior) ────────────────────────

@@ -25,6 +25,7 @@
     "test:fundamentals": "node --test --experimental-test-module-mocks tests/fundamentals.test.js",
     "test:watcher": "node --test --experimental-test-module-mocks tests/watcher.test.js",
     "test:dashboard": "node --test tests/dashboard.test.js",
+    "test:signals": "node --test tests/signals.test.js",
     "test:cli": "node --test tests/cli.test.js",
     "test:all": "node --test tests/e2e.test.js tests/pine_analyze.test.js tests/cli.test.js",
     "test:verbose": "node --test --test-reporter=spec tests/e2e.test.js tests/pine_analyze.test.js",

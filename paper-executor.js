@@ -11,8 +11,8 @@
 
 import {
   openPosition,
+  closePosition,
   checkOCO,
-  expirePositions,
   hasOpenPosition,
   ledgerPath,
   loadOpenPositions,
@@ -105,17 +105,44 @@ export async function onTick(ticker, currentPrice) {
  * Called by watcher when the session window closes (NOT inside the tick path).
  * Uses last known underlying price so no extra fetch is needed.
  *
+ * Strategies whose rules.json entry declares `exit_override.sell_at_market_open
+ * === false` (e.g. STRAT-12, an overnight swing) are held open instead of
+ * expired — checkOCO() picks them back up on the next session's ticks. An
+ * unknown/missing strategy_id or a missing `rules` argument fails toward the
+ * safe default (expire), matching the pre-existing behavior.
+ *
  * @param {string} ticker
  * @param {number} lastPrice  last underlying price seen during the session
+ * @param {object} [rules]  parsed rules.json — used to look up exit_override per strategy
  */
-export async function onSessionEnd(ticker, lastPrice) {
+export async function onSessionEnd(ticker, lastPrice, rules = null) {
   try {
     const open = loadOpenPositions().filter((p) => p.ticker === ticker);
     if (open.length === 0) return;
-    console.log(
-      `[PAPER] 🕐 Fin de sesión — expirando ${open.length} posición(es) para ${ticker} @$${lastPrice}`
-    );
-    expirePositions(ticker, lastPrice);
+
+    const strategies = rules?.strategies || [];
+    let closedCount = 0;
+
+    for (const pos of open) {
+      const stratDef = strategies.find((s) => s.id === pos.strategy_id);
+      const holdsOvernight = stratDef?.exit_override?.sell_at_market_open === false;
+
+      if (holdsOvernight) {
+        console.log(
+          `[PAPER] 🌙 ${pos.ticker} ${pos.side} ${pos.strategy_id} — ` +
+          `exit_override.sell_at_market_open=false, mantiene overnight (no expira)`
+        );
+        continue;
+      }
+      closePosition(pos.id, lastPrice, "expiry");
+      closedCount++;
+    }
+
+    if (closedCount > 0) {
+      console.log(
+        `[PAPER] 🕐 Fin de sesión — expiradas ${closedCount} posición(es) para ${ticker} @$${lastPrice}`
+      );
+    }
   } catch (e) {
     console.error("[PAPER] ⚠️ Error en onSessionEnd:", e.message);
   }

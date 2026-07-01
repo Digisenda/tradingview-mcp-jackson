@@ -611,8 +611,7 @@ export function generateHtml(briefData, date) {
         String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ' ET';
       var tot = h * 60 + m;
       var status = 'CERRADO', cls = 'text-gray-500';
-      if (tot >= 570 && tot < 690)      { status = '● VENTANA ACTIVA 9:30–11:30'; cls = 'text-green-400'; }
-      else if (tot >= 690 && tot < 960) { status = '○ MERCADO ABIERTO';           cls = 'text-yellow-400'; }
+      if (tot >= 570 && tot < 960)      { status = '● VENTANA ACTIVA 9:30–16:00'; cls = 'text-green-400'; }
       var el = document.getElementById('session-status');
       el.textContent = status; el.className = 'font-bold ' + cls;
     }

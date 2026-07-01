@@ -81,8 +81,8 @@ function nowHM() {
   return et.getHours() * 60 + et.getMinutes();
 }
 
-function isInSessionWindow(sessionStr) {
-  const match = (sessionStr || "09:30–11:30 ET").match(/(\d{1,2}):(\d{2})[–-](\d{1,2}):(\d{2})/);
+export function isInSessionWindow(sessionStr) {
+  const match = (sessionStr || "09:30–16:00 ET").match(/(\d{1,2}):(\d{2})[–-](\d{1,2}):(\d{2})/);
   if (!match) return true;
   const start = parseInt(match[1]) * 60 + parseInt(match[2]);
   const end = parseInt(match[3]) * 60 + parseInt(match[4]);
@@ -91,8 +91,8 @@ function isInSessionWindow(sessionStr) {
 }
 
 // True during the `warmupMinutes` window right before primary_window opens.
-function isInWarmupWindow(sessionStr, warmupMinutes) {
-  const match = (sessionStr || "09:30–11:30 ET").match(/(\d{1,2}):(\d{2})[–-](\d{1,2}):(\d{2})/);
+export function isInWarmupWindow(sessionStr, warmupMinutes) {
+  const match = (sessionStr || "09:30–16:00 ET").match(/(\d{1,2}):(\d{2})[–-](\d{1,2}):(\d{2})/);
   if (!match || !warmupMinutes) return false;
   const start = parseInt(match[1]) * 60 + parseInt(match[2]);
   const hm = nowHM();
@@ -520,7 +520,7 @@ async function tick(rules) {
       for (const symbol of watchlist) {
         const px = lastKnownPrices.get(symbol);
         if (px != null && px > 0) {
-          await onSessionEnd(symbol, px);
+          await onSessionEnd(symbol, px, rules);
         } else {
           console.warn(`[PAPER] ⚠️ Sin precio para ${symbol} al fin de sesión — posición permanece abierta`);
         }
@@ -618,7 +618,7 @@ async function main() {
   const { rules, path: rulesFrom } = loadRules();
   console.log(`  rules.json: ${rulesFrom}`);
   console.log(`  Watchlist : ${(rules.watchlist || []).join(", ")}`);
-  console.log(`  Ventana   : ${rules.session?.primary_window || "09:30-11:30 ET"}` +
+  console.log(`  Ventana   : ${rules.session?.primary_window || "09:30-16:00 ET"}` +
     (rules.session?.warmup_minutes ? ` (precalentamiento ${rules.session.warmup_minutes} min antes)` : ""));
   console.log(`  Log JSONL : ${signalLogPath()}`);
   const htmlPath = updateSignalsHtml();

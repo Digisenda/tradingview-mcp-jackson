@@ -46,9 +46,9 @@
     }
   },
   "session": {
-    "primary_window": "09:30–11:30 ET",
+    "primary_window": "09:30–16:00 ET",
     "warmup_minutes": 5,
-    "focus": "market open — primary profit window",
+    "focus": "full regular session — apertura a cierre",
     "avoid": "FED days ±2 business days, Earnings window ±7 days per ticker"
   },
   "strategy": {
