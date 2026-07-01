@@ -297,25 +297,80 @@ function updateSignalsHtml() {
 
 // ─── Email (optional — configure NODEMAILER_* in .env) ───────────────────────
 
-async function sendEmail(subject, body) {
+// Cached across calls — creating a fresh TLS connection per signal is what caused
+// Gmail to silently drop sends when several signals fired within the same second
+// (backlog #17). Reused here; combined with the per-tick buffer below (backlog #18)
+// this keeps well under one SMTP connection per 30s tick.
+let _transporter; // undefined = not yet resolved, null = not configured / failed
+
+async function getTransporter() {
+  if (_transporter !== undefined) return _transporter;
   const host = (process.env.NODEMAILER_HOST || "").trim();
   const user = (process.env.NODEMAILER_USER || "").trim();
   const pass = (process.env.NODEMAILER_PASS || "").replace(/\s+/g, ""); // App Passwords: strip spaces
   const to   = (process.env.NODEMAILER_TO   || "").trim();
-  if (!host || !user || !pass || !to) return;
-
+  if (!host || !user || !pass || !to) {
+    _transporter = null;
+    return null;
+  }
   try {
     const { createTransport } = await import("nodemailer");
-    const t = createTransport({ host, port: 587, secure: false, auth: { user, pass } }); // 587 STARTTLS
-    await t.sendMail({ from: user, to, subject, text: body });
-    console.log("[VIGIA] ✉️  Email:", subject);
+    _transporter = createTransport({ host, port: 587, secure: false, auth: { user, pass } }); // 587 STARTTLS
   } catch (e) {
     if (e.code === "ERR_MODULE_NOT_FOUND") {
       console.warn("[VIGIA] ℹ️  Email omitido — instala nodemailer: npm install nodemailer");
     } else {
-      console.warn("[VIGIA] ⚠️ Email falló:", e.message);
+      console.warn("[VIGIA] ⚠️ Email falló al crear transporte:", e.message);
     }
+    _transporter = null;
   }
+  return _transporter;
+}
+
+async function sendEmail(subject, body) {
+  const user = (process.env.NODEMAILER_USER || "").trim();
+  const to   = (process.env.NODEMAILER_TO   || "").trim();
+  const t = await getTransporter();
+  if (!t) return;
+
+  try {
+    await t.sendMail({ from: user, to, subject, text: body });
+    console.log("[VIGIA] ✉️  Email:", subject);
+  } catch (e) {
+    console.warn("[VIGIA] ⚠️ Email falló:", e.message);
+  }
+}
+
+// ─── Email buffer — one email per tick instead of one per signal (backlog #18) ─
+
+let pendingEmailSignals = []; // { symbol, candidate, price, vetoFlags } accumulated during a tick
+
+function queueEmail(symbol, candidate, price, vetoFlags) {
+  pendingEmailSignals.push({ symbol, candidate, price, vetoFlags });
+}
+
+function formatSignalBlock({ symbol, candidate, price, vetoFlags }) {
+  return [
+    `Señal: ${candidate.id} ${candidate.position} en ${symbol}`,
+    `Precio: $${price?.toFixed(2) ?? "?"}`,
+    `Confianza: ${candidate.confidence}`,
+    `Nota: ${candidate.note}`,
+    vetoFlags.length ? `⚠️ Veto: ${vetoFlags.join(", ")}` : "",
+  ].filter(Boolean).join("\n");
+}
+
+async function flushEmailBuffer() {
+  if (pendingEmailSignals.length === 0) return;
+  const items = pendingEmailSignals;
+  pendingEmailSignals = [];
+
+  const subject = items.length === 1
+    ? `[VIGIA] ${items[0].candidate.id} ${items[0].candidate.position} ${items[0].symbol}`
+    : `[VIGIA] ${items.length} señales`;
+  const hora = `Hora: ${new Date().toLocaleString("es-MX", { timeZone: "America/New_York" })} ET`;
+  const body = items.map(formatSignalBlock).join("\n\n---\n\n") + `\n\n${hora}`;
+
+  await sendEmail(subject, body);
 }
 
 // ─── Alert dispatch ───────────────────────────────────────────────────────────
@@ -348,17 +403,7 @@ async function fireAlert(symbol, candidate, price, vetoFlags) {
     return;
   }
 
-  await sendEmail(
-    `[VIGIA] ${candidate.id} ${candidate.position} ${symbol}`,
-    [
-      `Señal: ${candidate.id} ${candidate.position} en ${symbol}`,
-      `Precio: $${price?.toFixed(2) ?? "?"}`,
-      `Confianza: ${candidate.confidence}`,
-      `Nota: ${candidate.note}`,
-      vetoFlags.length ? `⚠️ Veto: ${vetoFlags.join(", ")}` : "",
-      `Hora: ${new Date().toLocaleString("es-MX", { timeZone: "America/New_York" })} ET`,
-    ].filter(Boolean).join("\n")
-  );
+  queueEmail(symbol, candidate, price, vetoFlags);
 }
 
 // ─── Signal state — only fire when confidence improves ───────────────────────
@@ -493,6 +538,8 @@ async function tick(rules) {
       console.warn(`\n[VIGIA] ⚠️ Error procesando ${symbol}: ${err.message}`);
     }
   }
+
+  await flushEmailBuffer();
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
