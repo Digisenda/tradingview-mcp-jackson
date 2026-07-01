@@ -303,7 +303,7 @@ pinecone.query(top_k=3) → contexto cualitativo al reporte
 > Registrado: 2026-05-26 — feedback de sesión real
 
 ### Problema
-El informe generado por el checklist premarket (7 pasos × 6 tickers) es **demasiado extenso y complejo** para su uso durante la ventana operativa (9:30–11:30 AM ET). El volumen de texto dificulta la toma rápida de decisiones.
+El informe generado por el checklist premarket (7 pasos × 6 tickers) es **demasiado extenso y complejo** para su uso durante la ventana operativa (9:30 AM – 4:00 PM ET, ampliada 2026-07-01 — antes 9:30–11:30 AM ET). El volumen de texto dificulta la toma rápida de decisiones.
 
 ### Objetivo
 Rediseñar el output del checklist para que sea **escaneable en < 30 segundos por ticker** — sin perder la información crítica de BB, MAs y estrategias candidatas.

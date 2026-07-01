@@ -127,7 +127,7 @@ docs/sessions/premarket-YYYY-MM-DD.html   (15 KB aprox, self-contained)
 
 Layout de 3 zonas:
 1. **Banner sesión** — fecha, reloj ET en vivo (JS), indicador ventana activa
-   (9:30–11:30), estado FED y Earnings
+   (9:30–16:00, horario completo de mercado), estado FED y Earnings
 2. **Banner setup activo** (naranja, condicional) — si algún ticker tiene
    `confidence: "conditions_met"` aparece destacado antes del grid
 3. **Grid de 6 cards** — una por ticker:
