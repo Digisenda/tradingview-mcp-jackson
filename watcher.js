@@ -328,7 +328,7 @@ function dashboardHtmlPath(date) {
   return join(outputDir(), `vigia-dashboard-${date}.html`);
 }
 
-async function updateUnifiedDashboard(rules, sessionLabel) {
+export async function updateUnifiedDashboard(rules, sessionLabel) {
   const date = todayET();
   const watchlist = rules.watchlist || [];
   const premarketData = loadPremarketData(date);
