@@ -200,6 +200,9 @@ Claude reads `CLAUDE.md` automatically when working in this project. It contains
 | `morning_brief` | Scan watchlist, read indicators, return structured data for session bias. Reads `rules.json` automatically. |
 | `session_save` | Save the generated brief to `~/.tradingview-mcp/sessions/YYYY-MM-DD.json` |
 | `session_get` | Retrieve today's brief (or yesterday's if today not saved yet) |
+| `premarket_load` | Read today's (or a given date's) pre-market analysis `.txt` and return parsed fields as JSON |
+| `premarket_save` | Save the full premarket checklist report as markdown + generate the HTML dashboard |
+| `premarket_score_save` | Save the day's evaluation score (DIR_GAP, VOL_PRE, levels, context) to `PROGRESO.txt` |
 
 ### Chart Reading
 
@@ -209,6 +212,20 @@ Claude reads `CLAUDE.md` automatically when working in this project. It contains
 | `data_get_study_values` | Read current RSI, MACD, BB, EMA values from all indicators | ~500B |
 | `quote_get` | Get latest price, OHLC, volume | ~200B |
 | `data_get_ohlcv` | Get price bars. **Use `summary: true`** for compact stats | 500B (summary) / 8KB (100 bars) |
+| `data_get_indicator` | Get an indicator/study's info and current input values | ~300B |
+| `chart_get_visible_range` | Get the visible date range and bar count on the chart | ~200B |
+| `chart_set_visible_range` | Zoom the chart to a specific unix-timestamp date range | ~100B |
+| `symbol_search` | Search for symbols by name or keyword | ~1KB |
+| `symbol_info` | Get metadata about the current symbol (name, exchange, type, description) | ~300B |
+| `depth_get` | Get order book / DOM (Depth of Market) data from the chart | ~1KB |
+
+### Strategy Tester Data
+
+| Tool | When to use |
+|------|------------|
+| `data_get_strategy_results` | Read performance metrics (net profit, win rate, drawdown) from Strategy Tester |
+| `data_get_trades` | Read the trade list from Strategy Tester |
+| `data_get_equity` | Read the equity curve from Strategy Tester |
 
 ### Custom Indicator Data (Pine Drawings)
 
@@ -245,6 +262,11 @@ Read `line.new()`, `label.new()`, `table.new()`, `box.new()` output from any vis
 | `pine_save` | 5. Save to TradingView cloud |
 | `pine_analyze` | Offline static analysis (no chart needed) |
 | `pine_check` | Server-side compile check (no chart needed) |
+| `pine_get_source` | Read current Pine Script source from the editor (WARNING: can be 200KB+) |
+| `pine_compile` | Compile/add the current script to the chart |
+| `pine_new` | Create a new blank indicator/strategy/library |
+| `pine_open` | Open a saved Pine Script by name |
+| `pine_list_scripts` | List your saved Pine Scripts |
 
 ### Replay Mode
 
@@ -263,12 +285,72 @@ Read `line.new()`, `label.new()`, `table.new()`, `box.new()` output from any vis
 |------|-------------|
 | `pane_set_layout` | Change grid: `s`, `2h`, `2v`, `2x2`, `4`, `6`, `8` |
 | `pane_set_symbol` | Set symbol on any pane |
+| `pane_list` | List all panes in the current layout with their symbols and active state |
+| `pane_focus` | Focus a specific pane by index (0-based) |
 | `draw_shape` | Draw horizontal_line, trend_line, rectangle, text |
 | `alert_create` / `alert_list` / `alert_delete` | Manage price alerts |
 | `batch_run` | Run action across multiple symbols/timeframes |
 | `watchlist_get` / `watchlist_add` | Read/modify watchlist |
 | `capture_screenshot` | Screenshot (regions: full, chart, strategy_tester) |
 | `tv_launch` / `tv_health_check` | Launch TradingView and verify connection |
+| `tv_discover` | Report which known TradingView API paths are available on this build |
+| `tv_ui_state` | Get current UI state — which panels are open, which buttons are visible/enabled |
+
+### Drawing Management
+
+| Tool | What it does |
+|------|-------------|
+| `draw_list` | List all shapes/drawings currently on the chart |
+| `draw_clear` | Remove all drawings from the chart |
+| `draw_remove_one` | Remove one drawing by entity ID |
+| `draw_get_properties` | Get properties and points of a specific drawing |
+| `drawn_lines_save` | Save the entity IDs of lines Claude drew this session, so next session can clean them up without touching your manual drawings |
+| `drawn_lines_clear` | Delete only the lines Claude drew in the previous session (never touches manual drawings) |
+
+### Layouts & Tabs
+
+| Tool | What it does |
+|------|-------------|
+| `layout_list` | List your saved chart layouts |
+| `layout_switch` | Switch to a saved layout by name or ID |
+| `tab_list` | List all open chart tabs |
+| `tab_new` | Open a new chart tab |
+| `tab_close` | Close the current chart tab |
+| `tab_switch` | Switch to a tab by index |
+
+### Trade Log & Feedback
+
+| Tool | What it does |
+|------|-------------|
+| `trade_save` | Save a closed trade to Neon Postgres (plus a local JSONL backup) for statistical feedback |
+| `trades_get` | Read recent trades back — used at checklist start to review past performance |
+
+### UI Automation
+
+Lower-level fallbacks for when a dedicated tool doesn't cover what you need — e.g. clicking a button that has no wrapper yet.
+
+| Tool | What it does |
+|------|-------------|
+| `ui_click` | Click an element by aria-label, `data-name`, text content, or class substring |
+| `ui_open_panel` | Open, close, or toggle a TradingView panel (pine-editor, strategy-tester, watchlist, alerts, trading) |
+| `ui_fullscreen` | Toggle TradingView fullscreen mode |
+| `ui_hover` | Hover over an element by aria-label, `data-name`, or text content |
+| `ui_keyboard` | Press keys or shortcuts (Enter, Escape, Alt+S, Ctrl+Z, ...) |
+| `ui_type_text` | Type text into the currently focused input/textarea |
+| `ui_scroll` | Scroll the chart or page up/down/left/right |
+| `ui_mouse_click` | Click at specific x,y coordinates on the TradingView window |
+| `ui_find_element` | Find elements by text, aria-label, or CSS selector and return their positions |
+| `ui_evaluate` | Execute arbitrary JavaScript in the TradingView page context (advanced/escape hatch) |
+
+### Screener (No TradingView Desktop Required)
+
+Runs against Yahoo Finance data instead of the live chart — useful for pre-session scans before Desktop is open. D1/H1 support 2+ years of history; M15 is limited to ~60 days.
+
+| Tool | What it does |
+|------|-------------|
+| `screener_get_indicators` | Get BB, SMAs, trendlines and indicator values for one symbol |
+| `screener_scan_multi` | Screen multiple tickers for strategy candidates at once |
+| `screener_run_backtest` | Run a historical backtest for a symbol + strategy |
 
 ---
 
