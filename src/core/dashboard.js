@@ -34,7 +34,7 @@ function renderTickerCard(ticker) {
   }
   const cls = CLASSIFICATION_CLASS[ticker.classification] || "watch";
   const label = CLASSIFICATION_LABEL[ticker.classification] || "—";
-  const bbMid = ticker.timeframes?.D1?.bb?.middle ?? ticker.timeframes?.D1?.bb?.basis;
+  const bbMid = ticker.timeframes?.D1?.bb?.basis;
   const maD1 = ticker.timeframes?.D1?.ma_order || "—";
   const bestCandidate = ticker.candidates?.[0];
 

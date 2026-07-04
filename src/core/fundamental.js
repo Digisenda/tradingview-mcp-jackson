@@ -21,19 +21,52 @@ const ETF_SYMBOLS = new Set(["SPY", "QQQ", "IWM", "DIA", "GLD", "TLT", "XLF", "X
 
 // ─── HTTP helper ──────────────────────────────────────────────────────────────
 
-export function fetchHtml(url, timeoutMs = 6000) {
+const REDIRECT_CODES = new Set([301, 302, 303, 307, 308]);
+
+/** Sigue hasta `maxRedirects` saltos 3xx — Finviz ya rompió los scrapers una vez
+ *  (2026-06/07) por retirar URLs viejas detrás de redirects; con esto un cambio
+ *  de URL similar en el futuro no vuelve a requerir hardcodear el destino final. */
+export function fetchHtml(url, timeoutMs = 6000, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("timeout")), timeoutMs);
-    get(url, { headers: HEADERS }, (res) => {
-      if (res.statusCode !== 200) {
-        clearTimeout(timer);
-        reject(new Error(`HTTP ${res.statusCode}`));
-        return;
-      }
-      let body = "";
-      res.on("data", (c) => (body += c));
-      res.on("end", () => { clearTimeout(timer); resolve(body); });
-    }).on("error", (e) => { clearTimeout(timer); reject(e); });
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) { settled = true; reject(new Error("timeout")); }
+    }, timeoutMs);
+    const finish = (fn, arg) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(arg);
+    };
+
+    function request(currentUrl, redirectsLeft) {
+      get(currentUrl, { headers: HEADERS }, (res) => {
+        if (REDIRECT_CODES.has(res.statusCode) && res.headers?.location) {
+          res.resume?.();
+          if (redirectsLeft <= 0) {
+            finish(reject, new Error(`demasiados redirects desde ${url}`));
+            return;
+          }
+          let nextUrl;
+          try {
+            nextUrl = new URL(res.headers.location, currentUrl).toString();
+          } catch {
+            finish(reject, new Error(`Location de redirect inválida: ${res.headers.location}`));
+            return;
+          }
+          request(nextUrl, redirectsLeft - 1);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          finish(reject, new Error(`HTTP ${res.statusCode}`));
+          return;
+        }
+        let body = "";
+        res.on("data", (c) => (body += c));
+        res.on("end", () => finish(resolve, body));
+      }).on("error", (e) => finish(reject, e));
+    }
+    request(url, maxRedirects);
   });
 }
 
@@ -66,13 +99,15 @@ export function daysDiff(isoDate, today = new Date()) {
 // ─── Finviz scrapers ──────────────────────────────────────────────────────────
 //
 // Finviz retired the old /quote.ashx and /calendar.ashx URLs and redesigned
-// both pages' markup (2026-06/07). Both old URLs now chain THROUGH multiple
-// 301s (.ashx → /quote?t=X → /stock?t=X ; .ashx → /calendar → /calendar/economic)
-// — fetchHtml() does not follow redirects, so these must be the final URLs,
-// not just the first Location header. The earnings snapshot table moved to a
-// class-based layout; the calendar page now embeds its event list as inline
-// JSON (`{"calendarId":...}` objects) — more reliable to parse than the old
-// HTML table scrape. Verified against the live pages 2026-07-01.
+// both pages' markup (2026-06/07). Both old URLs chained THROUGH multiple 301s
+// (.ashx → /quote?t=X → /stock?t=X ; .ashx → /calendar → /calendar/economic) —
+// hardcoded here to the final URLs anyway (cheaper than a redirect hop), but
+// fetchHtml() now follows redirects on its own (2026-07-04) so a future Finviz
+// URL change breaks gracefully instead of silently falling back to rules.json.
+// The earnings snapshot table moved to a class-based layout; the calendar page
+// now embeds its event list as inline JSON (`{"calendarId":...}` objects) —
+// more reliable to parse than the old HTML table scrape. Verified against the
+// live pages 2026-07-01.
 
 async function scrapeEarnings(symbol) {
   const html = await fetchHtml(`https://finviz.com/stock?t=${symbol}`);

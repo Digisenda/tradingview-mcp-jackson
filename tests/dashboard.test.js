@@ -40,7 +40,7 @@ test("renderUnifiedDashboard: con datos completos renderiza scorecard + señales
           symbol: "NVDA",
           price: 195.07,
           classification: "ejecutar",
-          timeframes: { D1: { bb: { middle: 182.4 }, ma_order: "alcista" } },
+          timeframes: { D1: { bb: { basis: 182.4, upper: 190.1, lower: 174.7, width: 15.4 }, ma_order: "alcista" } },
           candidates: [{ id: "STRAT-05", position: "CALL", confidence: "conditions_met" }],
         },
       ],

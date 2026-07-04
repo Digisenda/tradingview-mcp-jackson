@@ -6,8 +6,10 @@ import assert from "node:assert/strict";
 
 // ─── Mock setup (antes de cualquier import del módulo bajo test) ──────────────
 
-// scenarios: { calendar: { body } | { error }, earnings: { SYM: { body } | { error } } }
-let scenarios = { calendar: { body: "" }, earnings: {} };
+// scenarios: { calendar: { body } | { error }, earnings: { SYM: { body } | { error } },
+//             byUrl: { [exactUrl]: { statusCode, headers, body } } — chequeado primero,
+//             para tests que necesitan controlar respuestas por URL exacta (redirects). }
+let scenarios = { calendar: { body: "" }, earnings: {}, byUrl: {} };
 
 const mockGet = mock.fn((url, _opts, cb) => {
   let errorHandler = null;
@@ -20,11 +22,13 @@ const mockGet = mock.fn((url, _opts, cb) => {
 
   const isCalendar = url.includes("/calendar");
   const symMatch = url.match(/stock\?t=([A-Z]+)/);
-  const scenario = isCalendar
-    ? scenarios.calendar
-    : symMatch
-      ? scenarios.earnings[symMatch[1]] || { body: "" }
-      : { body: "" };
+  const scenario = scenarios.byUrl?.[url]
+    ? scenarios.byUrl[url]
+    : isCalendar
+      ? scenarios.calendar
+      : symMatch
+        ? scenarios.earnings[symMatch[1]] || { body: "" }
+        : { body: "" };
 
   queueMicrotask(() => {
     if (scenario.error) {
@@ -33,6 +37,8 @@ const mockGet = mock.fn((url, _opts, cb) => {
     }
     const res = {
       statusCode: scenario.statusCode ?? 200,
+      headers: scenario.headers || {},
+      resume() { return res; },
       on(event, handler) {
         if (event === "data") handler(scenario.body ?? "");
         if (event === "end") handler();
@@ -47,7 +53,7 @@ const mockGet = mock.fn((url, _opts, cb) => {
 
 await mock.module("node:https", { namedExports: { get: mockGet } });
 
-const { checkFundamentals, parseFinvizDate, daysDiff } = await import("../src/core/fundamental.js");
+const { checkFundamentals, parseFinvizDate, daysDiff, fetchHtml } = await import("../src/core/fundamental.js");
 
 // ─── parseFinvizDate ───────────────────────────────────────────────────────────
 
@@ -154,4 +160,58 @@ test("checkFundamentals: sin datos en ningún lado → earnings null, no active"
   const result = await checkFundamentals(["NVDA"], { fundamental_filters: {} });
   assert.strictEqual(result.earnings.NVDA.date, null);
   assert.strictEqual(result.earnings.NVDA.active, false);
+});
+
+// ─── fetchHtml — sigue redirects (hallazgo PLAUSIBLE #7 del /code-review, cerrado 2026-07-04) ──
+
+test("fetchHtml: sigue un único redirect 301 hasta el destino final", async () => {
+  scenarios = {
+    calendar: { body: "" },
+    earnings: {},
+    byUrl: {
+      "https://finviz.com/old-url": { statusCode: 301, headers: { location: "https://finviz.com/new-url" } },
+      "https://finviz.com/new-url": { statusCode: 200, body: "contenido final" },
+    },
+  };
+  const body = await fetchHtml("https://finviz.com/old-url");
+  assert.strictEqual(body, "contenido final");
+});
+
+test("fetchHtml: sigue una cadena de varios redirects", async () => {
+  scenarios = {
+    calendar: { body: "" },
+    earnings: {},
+    byUrl: {
+      "https://finviz.com/a": { statusCode: 301, headers: { location: "https://finviz.com/b" } },
+      "https://finviz.com/b": { statusCode: 302, headers: { location: "https://finviz.com/c" } },
+      "https://finviz.com/c": { statusCode: 200, body: "final tras 2 saltos" },
+    },
+  };
+  const body = await fetchHtml("https://finviz.com/a");
+  assert.strictEqual(body, "final tras 2 saltos");
+});
+
+test("fetchHtml: resuelve un Location relativo contra la URL actual", async () => {
+  scenarios = {
+    calendar: { body: "" },
+    earnings: {},
+    byUrl: {
+      "https://finviz.com/old-url": { statusCode: 301, headers: { location: "/new-url" } },
+      "https://finviz.com/new-url": { statusCode: 200, body: "resuelto ok" },
+    },
+  };
+  const body = await fetchHtml("https://finviz.com/old-url");
+  assert.strictEqual(body, "resuelto ok");
+});
+
+test("fetchHtml: rechaza tras exceder maxRedirects (evita loop infinito)", async () => {
+  scenarios = {
+    calendar: { body: "" },
+    earnings: {},
+    byUrl: {
+      "https://finviz.com/loop-a": { statusCode: 301, headers: { location: "https://finviz.com/loop-b" } },
+      "https://finviz.com/loop-b": { statusCode: 301, headers: { location: "https://finviz.com/loop-a" } },
+    },
+  };
+  await assert.rejects(() => fetchHtml("https://finviz.com/loop-a", 6000, 2), /demasiados redirects/);
 });
