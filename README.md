@@ -21,16 +21,16 @@ Built on top of the original [tradingview-mcp](https://github.com/tradesdontlie/
 |---------|-------------|
 | `morning_brief` | One command that scans your watchlist across D1/H1/M15, reads BB + SMAs, and returns structured data + strategy candidates for Claude to apply the full 7-step premarket checklist |
 | `session_save` / `session_get` | Saves your daily brief to `~/.tradingview-mcp/sessions/` so you can compare today vs yesterday |
-| `rules.json` | Write your trading rules once — watchlist, bias criteria, risk rules, strategies (STRAT-01 to 11), FED calendar, earnings dates. Applied automatically every day |
+| `rules.json` | Write your trading rules once — watchlist, bias criteria, risk rules, strategies (STRAT-01 to 13), FED calendar, earnings dates. Applied automatically every day |
 | Fundamental filters | `morning_brief` auto-checks FED events (±2 business days) and earnings (±7 days) per ticker via `rules.json`. Warns before the analysis if any filter is active |
-| HTML dashboard | `premarket_save` generates a static `.html` dashboard alongside the `.md` report — opens in browser with one click. Shows ticker cards, BB levels, strategy badges, live ET clock, and a BID/ASK calculator (MID / STOP −25% / TARGET +12%) |
+| HTML dashboard | `premarket_save` generates a static `.html` dashboard alongside the `.md` report — opens in browser with one click. Shows ticker cards, BB levels, strategy badges, live ET clock, and a BID/ASK calculator (MID / STOP −15% / TARGET +12%) |
 | Schwab screenshot analyzer | `npm run schwab` starts a local server (port 9224). Drag a Charles Schwab trade history screenshot onto the dashboard → Claude Haiku reads the BOT/SOLD fields and pre-fills the LOG TRADE form automatically |
-| Supabase persistence | Trade log, signals, and premarket sessions stored in Supabase. Open positions panel in the dashboard shows live entries and auto-fills close form when you upload the exit screenshot |
+| Neon Postgres persistence | Trade log, signals, and premarket sessions stored in Neon Postgres. Open positions panel in the dashboard shows live entries and auto-fills close form when you upload the exit screenshot |
 | Signal-first architecture | Each premarket analysis generates `signal_code` records (e.g. `20260525-NVDA-CALL-STRAT08`). Trades reference signals, closing the loop between morning analysis and execution |
 | Launch bug fix | Fixed `tv_launch` compatibility with TradingView Desktop v2.14+ |
 | `tv brief` CLI | Run your morning brief from the terminal in one word |
 
-> **Digisenda fork additions (Fases 3–6):** fundamental filters, HTML dashboard, Supabase trade log, and Schwab screenshot analyzer are specific to this fork — not in the upstream LewisWJackson repo.
+> **Digisenda fork additions (Fases 3–6):** fundamental filters, HTML dashboard, Neon Postgres trade log, and Schwab screenshot analyzer are specific to this fork — not in the upstream LewisWJackson repo.
 
 ---
 
@@ -191,7 +191,7 @@ Claude reads `CLAUDE.md` automatically when working in this project. It contains
 
 ---
 
-## Tool Reference (81 MCP tools)
+## Tool Reference (91 MCP tools)
 
 ### Morning Brief (new in this fork)
 
@@ -317,11 +317,11 @@ Full command list: `tv --help`
 Claude Code  ←→  MCP Server (stdio)  ←→  CDP (port 9222)  ←→  TradingView Desktop (Electron)
 ```
 
-- **78 original tools** + **3 morning brief tools** = 81 MCP tools total
+- **91 MCP tools total**
 - **Transport**: MCP over stdio + CLI (`tv` command)
 - **Connection**: Chrome DevTools Protocol on localhost:9222
 - **Schwab analyzer**: optional local service on port 9224 — calls Anthropic API (`npm run schwab`)
-- **Supabase**: optional cloud persistence for trades, signals, and premarket sessions (`.env` required)
+- **Neon Postgres**: optional cloud persistence for trades, signals, and premarket sessions (`.env` required)
 
 ---
 

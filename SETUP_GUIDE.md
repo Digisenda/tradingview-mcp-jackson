@@ -5,7 +5,7 @@ This file is a step-by-step guide for Claude Code (or any LLM agent) to install 
 ## Step 1: Clone and Install
 
 ```bash
-git clone https://github.com/LewisWJackson/tradingview-mcp-jackson.git ~/tradingview-mcp-jackson
+git clone https://github.com/Digisenda/tradingview-mcp-jackson.git ~/tradingview-mcp-jackson
 cd ~/tradingview-mcp-jackson
 npm install
 ```
@@ -29,8 +29,9 @@ Tell the user: "Open `rules.json` and fill in your watchlist, bias criteria (wha
 ## Step 3: Configure environment variables (optional services)
 
 The MCP server works without this step. You only need `.env` if you want:
-- **Supabase persistence** — trade log, signals, and premarket sessions stored in the cloud
+- **Neon Postgres persistence** — trade log, signals, and premarket sessions stored in the cloud
 - **Schwab screenshot analyzer** — drag-and-drop trade screenshots to pre-fill the LOG TRADE form
+- **Vigía email alerts** — `watcher.js` notifies you by email (optional; works without it)
 
 ```bash
 cp .env.example .env
@@ -39,13 +40,15 @@ cp .env.example .env
 Open `.env` and fill in:
 
 ```
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_key_here
+DATABASE_URL=postgresql://neondb_owner:CHANGE_ME@ep-XXXX.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 ```
 
-- **`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY`**: from your Supabase project → Settings → API
+- **`DATABASE_URL`**: from your Neon project → Dashboard → Connection string (console.neon.tech)
 - **`ANTHROPIC_API_KEY`**: from [console.anthropic.com](https://console.anthropic.com/settings/keys) — needed for the Schwab screenshot analyzer only
+- **`NODEMAILER_HOST` / `NODEMAILER_USER` / `NODEMAILER_PASS` / `NODEMAILER_TO`** (optional): SMTP credentials so `watcher.js` can email alerts. Requires `npm install nodemailer`. Without these, the vigía still runs, just without email.
+
+> Supabase is legacy — the project migrated to Neon Postgres. `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are no longer read by the server.
 
 To start the Schwab analyzer service (keep running alongside the dashboard):
 

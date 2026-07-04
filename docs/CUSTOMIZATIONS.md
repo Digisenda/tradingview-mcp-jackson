@@ -139,7 +139,7 @@ Layout de 3 zonas:
    - Borde naranja en cards con setup activo
 4. **Calculadora BID/ASK** — JS puro, sin API:
    - Inputs: BID, ASK, contratos
-   - Outputs: MID, STOP −25% (precio + USD × contratos), TARGET +12%, inversión total
+   - Outputs: MID, STOP −15% (precio + USD × contratos), TARGET +12%, inversión total
 
 ### Cómo se genera
 ```
