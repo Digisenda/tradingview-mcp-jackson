@@ -25,7 +25,7 @@ export function registerMorningTools(server) {
 
   server.tool(
     "premarket_save",
-    "Save the full premarket checklist report as a markdown file in docs/sessions/premarket-YYYY-MM-DD.md inside the project repo. Pass brief_data (JSON string from morning_brief output) to also generate an HTML dashboard.",
+    "Save the full premarket checklist report as a markdown file in docs/sessions/premarket-YYYY-MM-DD.md inside the project repo. Pass brief_data (JSON string from morning_brief output) to also generate a normalized premarket-YYYY-MM-DD.json for the vigía's unified dashboard to read.",
     {
       content: z
         .string()
@@ -38,7 +38,7 @@ export function registerMorningTools(server) {
         .string()
         .optional()
         .describe(
-          "JSON string of the morning_brief structured output (symbols_scanned + fundamental_filters). When provided, also generates an HTML dashboard at premarket-YYYY-MM-DD.html.",
+          "JSON string of the morning_brief structured output (symbols_scanned + fundamental_filters). When provided, also generates premarket-YYYY-MM-DD.json for the unified dashboard.",
         ),
     },
     async ({ content, date, brief_data } = {}) => {

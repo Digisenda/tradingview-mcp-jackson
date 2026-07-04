@@ -216,13 +216,11 @@ function logSignal(entry) {
   }
 }
 
-// ─── Dashboard HTML ───────────────────────────────────────────────────────────
+// ─── Señales del día ──────────────────────────────────────────────────────────
+// (T7, 2026-07-04: el HTML standalone signals-YYYY-MM-DD.html se retiró — el
+// dashboard unificado, validado en vivo, ya renderiza esta misma zona de señales.)
 
-function signalHtmlPath(date) {
-  return join(outputDir(), `signals-${date}.html`);
-}
-
-/** Señales del día, leídas del JSONL (misma fuente para signals-*.html y el dashboard unificado). */
+/** Señales del día, leídas del JSONL (fuente del dashboard unificado). */
 function readTodaySignals() {
   const jsonlPath = signalLogPath();
   const entries = [];
@@ -235,80 +233,8 @@ function readTodaySignals() {
   return entries;
 }
 
-function updateSignalsHtml() {
-  const date = todayET();
-  const htmlPath  = signalHtmlPath(date);
-  const entries = readTodaySignals();
-
-  const now = new Date().toLocaleString("en-US", {
-    timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", hour12: true,
-  });
-
-  const rows = entries.map((e) => {
-    const time = new Date(e.logged_at).toLocaleString("en-US", {
-      timeZone: "America/New_York", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
-    });
-    const conf  = e.confidence || "";
-    const side  = e.position || e.side || "";
-    const veto  = e.veto_flags?.length ? ` ⚠️ ${e.veto_flags.join(" · ")}` : "";
-    const mode  = e.dry_run ? '<span style="opacity:.5">dry-run</span>' : '<span style="color:#00ff88">REAL</span>';
-    return `<tr class="${e.dry_run ? "dry" : ""}">
-      <td>${time}</td>
-      <td><b>${e.ticker}</b></td>
-      <td>${e.strategy}</td>
-      <td class="${side}">${side}</td>
-      <td class="${conf}">${conf}</td>
-      <td>$${e.price?.toFixed(2) ?? "?"}</td>
-      <td style="font-size:.85em;max-width:420px">${e.note}${veto}</td>
-      <td>${mode}</td>
-    </tr>`;
-  }).join("\n");
-
-  const html = `<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="30">
-  <title>Vigía — ${date}</title>
-  <style>
-    body{font-family:monospace;background:#0d0d0d;color:#e0e0e0;padding:20px;margin:0}
-    h1{color:#00d4ff;margin:0 0 4px}
-    p{color:#666;margin:0 0 16px;font-size:.85em}
-    table{border-collapse:collapse;width:100%}
-    th{background:#1a1a2e;color:#00d4ff;padding:8px 12px;text-align:left;font-size:.85em}
-    td{padding:6px 12px;border-bottom:1px solid #1a1a1a;font-size:.85em}
-    tr:hover td{background:#111}
-    .conditions_met{color:#00ff88;font-weight:bold}
-    .setup_forming{color:#ffd700}
-    .watch{color:#888}
-    .CALL{color:#00ff88;font-weight:bold}
-    .PUT{color:#ff4444;font-weight:bold}
-    .dry td{opacity:.5}
-  </style>
-</head>
-<body>
-  <h1>📡 Vigía — Señales ${date}</h1>
-  <p>Actualizado: ${now} ET · auto-refresh 30 s · ${entries.length} señal(es)</p>
-  <table>
-    <thead><tr>
-      <th>Hora ET</th><th>Ticker</th><th>Estrategia</th><th>Lado</th>
-      <th>Confianza</th><th>Precio</th><th>Nota</th><th>Modo</th>
-    </tr></thead>
-    <tbody>${rows || '<tr><td colspan="8" style="color:#555;text-align:center;padding:24px">Sin señales aún</td></tr>'}</tbody>
-  </table>
-</body>
-</html>`;
-
-  try {
-    writeFileSync(htmlPath, html, "utf8");
-  } catch (e) {
-    console.warn("[VIGIA] ⚠️ No se pudo escribir dashboard HTML:", e.message);
-  }
-  return htmlPath;
-}
-
-// ─── Dashboard unificado (T6 — genera EN PARALELO a signals-*.html/premarket-*.html
-// durante la semana de validación en vivo; D5, backlog #6) ────────────────────
+// ─── Dashboard unificado (T6, backlog #6 — único dashboard HTML desde 2026-07-04;
+// reemplaza signals-*.html/premarket-*.html, retirados en T7 tras 1 semana en vivo) ──
 
 // undefined = todavía no encontrado hoy (reintenta en la próxima llamada);
 // objeto = encontrado y cacheado por el resto del día. NUNCA se cachea `null`
@@ -473,9 +399,6 @@ async function fireAlert(symbol, candidate, price, vetoFlags) {
     veto_flags: vetoFlags,
     dry_run: DRY_RUN,
   });
-
-  const htmlPath = updateSignalsHtml();
-  console.log(`        📊 Dashboard: ${htmlPath}`);
 
   if (DRY_RUN) {
     console.log("        [dry-run] — sin email");
@@ -667,8 +590,7 @@ async function main() {
   console.log(`  Ventana   : ${rules.session?.primary_window || "09:30-16:00 ET"}` +
     (rules.session?.warmup_minutes ? ` (precalentamiento ${rules.session.warmup_minutes} min antes)` : ""));
   console.log(`  Log JSONL : ${signalLogPath()}`);
-  const htmlPath = updateSignalsHtml();
-  console.log(`  Dashboard : ${htmlPath}`);
+  console.log(`  Dashboard : ${dashboardHtmlPath(todayET())} (aparece tras el 1er tick en ventana de mercado)`);
   const paperEnabled = rules.paper_trading?.enabled === true;
   console.log(`  Paper trd : ${paperEnabled ? `ACTIVO (min_score=${rules.paper_trading.min_score ?? 60})` : "DESACTIVADO (enabled=false)"}`);
   console.log("  Ctrl+C para detener\n");
