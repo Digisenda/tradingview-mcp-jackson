@@ -5,8 +5,21 @@
  * import from the other.
  */
 import { join } from "node:path";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 
-export const TV_DIR = "D:\\Projects\\TRADINGVIEW";
+/**
+ * TV_WORK_DIR overrides everything (set by setup.sh when registering the MCP).
+ * Otherwise probe the conventional locations before falling back to
+ * ~/TRADINGVIEW, so a fresh machine still gets a sane default.
+ */
+function resolveTvDir() {
+  if (process.env.TV_WORK_DIR) return process.env.TV_WORK_DIR;
+  const candidates = ["D:\\Projects\\TRADINGVIEW", join(homedir(), "TRADINGVIEW")];
+  return candidates.find(existsSync) ?? candidates[candidates.length - 1];
+}
+
+export const TV_DIR = resolveTvDir();
 export const ANALISIS_PREMERCADO_DIR = join(TV_DIR, "ANALISIS-PREMERCADO");
 
 /** Monday (ISO week start) for a "YYYY-MM-DD" date string, as "YYYY-MM-DD". */

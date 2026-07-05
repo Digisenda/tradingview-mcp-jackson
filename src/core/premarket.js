@@ -5,8 +5,8 @@
  */
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { TV_DIR } from "./paths.js";
 
-const TV_DIR = "D:\\Projects\\TRADINGVIEW";
 const PROGRESO_PATH = join(TV_DIR, "PROGRESO.txt");
 
 // ─── Filename helpers ─────────────────────────────────────────────────────────
