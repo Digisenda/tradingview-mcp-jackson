@@ -41,7 +41,7 @@ Paste this into Claude Code and it will handle everything:
 ```
 Set up TradingView MCP Jackson for me. 
 Clone https://github.com/Digisenda/tradingview-mcp-jackson.git to ~/tradingview-mcp-jackson, run npm install, then add it to my MCP config at ~/.claude/.mcp.json (merge with any existing servers, don't overwrite them). 
-The config block is: { "mcpServers": { "tradingview": { "command": "node", "args": ["/Users/YOUR_USERNAME/tradingview-mcp-jackson/src/server.js"] } } } — replace YOUR_USERNAME with my actual username.
+The config block is: { "mcpServers": { "tradingview": { "command": "node", "args": ["/Users/YOUR_USERNAME/tradingview-mcp-jackson/src/server.js"], "env": { "TV_WORK_DIR": "/Users/YOUR_USERNAME/TRADINGVIEW" } } } } — replace YOUR_USERNAME with my actual username. TV_WORK_DIR is optional (see "Working Directory" below) but recommended so reports land in a predictable folder.
 Then copy rules.example.json to rules.json and open it so I can fill in my trading rules.
 Finally restart and verify with tv_health_check.
 ```
@@ -110,13 +110,17 @@ Add to `~/.claude/.mcp.json` (merge with any existing servers):
   "mcpServers": {
     "tradingview": {
       "command": "node",
-      "args": ["/Users/YOUR_USERNAME/tradingview-mcp-jackson/src/server.js"]
+      "args": ["/Users/YOUR_USERNAME/tradingview-mcp-jackson/src/server.js"],
+      "env": {
+        "TV_WORK_DIR": "/Users/YOUR_USERNAME/TRADINGVIEW"
+      }
     }
   }
 }
 ```
 
 Replace `YOUR_USERNAME` with your actual username. On Mac: `echo $USER` to check.
+`env.TV_WORK_DIR` is optional — see [Working Directory](#working-directory-tv_work_dir) below.
 
 ### 5. Verify
 
@@ -131,6 +135,35 @@ Or from the terminal:
 npm link  # install tv CLI globally (one time)
 tv brief
 ```
+
+---
+
+## Working Directory (`TV_WORK_DIR`)
+
+`morning_brief`'s premarket reports (`premarket_save`/`premarket_load`),
+`premarket_score_save`'s `PROGRESO.txt`, and `trade_save`'s local JSONL
+backup all write into a **work directory** — separate from wherever you
+cloned this fork, so you can keep years of daily reports without bloating
+the tool's own repo.
+
+**Resolution order** (see `src/core/paths.js`):
+1. `TV_WORK_DIR` env var, if set (recommended — set it in your MCP config's
+   `env` block, as shown in step 4 above)
+2. The first of a couple of conventional fallback locations that happens to
+   exist on disk
+3. `~/TRADINGVIEW` as a last resort, even if it doesn't exist yet
+
+If you're just using the MCP tools standalone, any folder works — create it
+and point `TV_WORK_DIR` at it. If you're also running the companion
+checklist/skills system (premarket evaluation, weekly review, etc.), that
+system's own setup script detects your folder and registers `TV_WORK_DIR`
+for you automatically.
+
+**Multiple machines:** the fork's code and `rules.json` sync the normal git
+way (`git pull`/`git push` — nothing here auto-commits). If you also use
+Neon Postgres (see below), trade/signal data written by `trade_save` syncs
+automatically between machines in real time, since it's a shared remote
+database — no git involved for that part.
 
 ---
 
@@ -385,6 +418,7 @@ Full command list: `tv --help`
 | `tv` command not found | Run `npm link` from the project directory |
 | `morning_brief` — "No rules.json found" | Run `cp rules.example.json rules.json` and fill it in |
 | `morning_brief` — watchlist empty | Add symbols to the `watchlist` array in `rules.json` |
+| Reports/`PROGRESO.txt` landing in the wrong folder | Set `TV_WORK_DIR` explicitly in your MCP config's `env` block — see [Working Directory](#working-directory-tv_work_dir) |
 | Tools return stale data | TradingView still loading — wait a few seconds |
 | Pine Editor tools fail | Open Pine Editor panel first: `ui_open_panel pine-editor open` |
 | Schwab analyzer — port 9224 refused | Run `npm run schwab` in a separate terminal; keep it running while using the dashboard |
@@ -404,6 +438,7 @@ Claude Code  ←→  MCP Server (stdio)  ←→  CDP (port 9222)  ←→  Tradin
 - **Connection**: Chrome DevTools Protocol on localhost:9222
 - **Schwab analyzer**: optional local service on port 9224 — calls Anthropic API (`npm run schwab`)
 - **Neon Postgres**: optional cloud persistence for trades, signals, and premarket sessions (`.env` required)
+- **Work directory**: reports/logs live outside the fork's own folder, resolved via `TV_WORK_DIR` (see [Working Directory](#working-directory-tv_work_dir))
 
 ---
 
