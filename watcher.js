@@ -27,6 +27,7 @@ import {
   maOrder,
   screenStrategies,
 } from "./src/core/signals.js";
+import { computeTrendlineAt } from "./src/core/trendline.js";
 import { onSignal, onTick, onSessionEnd, reportStartupState } from "./paper-executor.js";
 import * as fundamentals from "./src/core/fundamentals.js";
 import { renderUnifiedDashboard } from "./src/core/dashboard.js";
@@ -167,11 +168,35 @@ async function scanSymbol(symbol) {
         const bb = extractBB(indicators);
         const smas = extractSMAs(indicators);
 
+        // Trendline H1 (STRAT-01/02, automatizado 2026-07-13): fetch de OHLCV real solo en
+        // el timeframe H1 — computeTrendlineAt() reusa el mismo algoritmo del backtest FASE 3
+        // (src/core/trendline.js). Se descarta la última vela (aún formándose) y se evalúa
+        // contra el cierre de la última vela YA CERRADA, no el precio intradía en vivo.
+        let trendlineUp = null, trendlineDn = null, lastClosedClose = null;
+        if (key === "H1") {
+          try {
+            const ohlcv = await data.getOhlcv({ count: 25 });
+            const closedBars = (ohlcv?.bars || []).slice(0, -1);
+            if (closedBars.length >= 21) {
+              const idx = closedBars.length - 1;
+              trendlineUp = computeTrendlineAt(closedBars, idx, "up", 20);
+              trendlineDn = computeTrendlineAt(closedBars, idx, "down", 20);
+              lastClosedClose = closedBars[idx].close;
+            }
+          } catch {
+            // Best-effort — un fallo en el fetch de OHLCV no debe tumbar el resto del scan H1;
+            // STRAT-01/02 simplemente degradan a "watch" (PC-001) sin los 3 triggers.
+          }
+        }
+
         tfData[key] = {
           bb,
           smas,
           bb_position: bb ? bbPosition(price, bb) : "no_bb_detected",
           ma_order: smas.length >= 4 ? maOrder(price, smas) : "insufficient_data",
+          trendline_up: trendlineUp,
+          trendline_dn: trendlineDn,
+          last_closed_close: lastClosedClose,
         };
       } catch (err) {
         tfData[key] = { error: err.message };

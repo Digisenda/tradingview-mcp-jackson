@@ -69,7 +69,10 @@ function toETMinutes(date) {
 
 /**
  * Preliminary strategy screening based on multi-TF data.
- * Full confirmation (trendlines, M15 signals) is evaluated by Claude or the watcher.
+ * STRAT-01/02 trendline+MA20+M15 triggers are fully automated (2026-07-13) when
+ * tfData.H1 carries trendline_up/trendline_dn/last_closed_close (computed in watcher.js
+ * from live OHLCV via computeTrendlineAt()); without those fields they degrade gracefully
+ * to the PC-001-only "watch" behavior. STRAT-08/09's M15 trendline remains manual.
  *
  * @param {number|null} price    Current price
  * @param {{ D1: object, H1: object, M15: object }} tfData  Per-TF indicators
@@ -89,25 +92,74 @@ export function screenStrategies(price, tfData, barTime = null) {
   const m15BBPos = m15.bb_position;
   const d1MAOrd = d1.ma_order;
   const h1MAOrd = h1.ma_order;
+  const m15MAOrd = m15.ma_order;
   const m15Width = m15.bb?.width;
 
-  // STRAT-01 CALL — Cambio tendencia al alza (rules.json STRAT-01-PC-001)
-  // Solo detectable automáticamente: contexto H1 bajista (precondición).
-  // Triggers (ruptura trendline + cierre sobre MA20 + vela confirmación M15) son manuales.
-  if (h1BBPos === "below_middle" || h1MAOrd === "bajista" || h1MAOrd === "mixto_bajista") {
-    candidates.push({
-      id: "STRAT-01", position: "CALL", confidence: "watch",
-      note: "H1 bajista (PC-001 ✅) → pendiente manual: ruptura trendline bajista H1 + cierre sobre MA20 H1 + confirmación M15 alcista",
-    });
+  // STRAT-01 CALL — Cambio tendencia al alza (rules.json PC-001/TR-001/TR-002/CF-001)
+  // Automatizado 2026-07-13: los 3 triggers ya no requieren confirmación manual.
+  // TR-001: cierre de la última vela H1 CERRADA por encima de la trendline de resistencia
+  //   (regresión lineal sobre máximos, 20 velas H1 — tfData.H1.trendline_up, calculada en
+  //   watcher.js desde OHLCV real vía computeTrendlineAt()).
+  // TR-002: cierre de esa misma vela H1 por encima de la SMA20 H1 (vela de confirmación).
+  // CF-001: M15 confirma alcista (bb_position/ma_order).
+  // Se usa el cierre de vela YA CERRADA (last_closed_close), no el precio intradía en vivo,
+  // para no disparar con una mecha que rompe y se devuelve — decisión explícita del usuario.
+  {
+    const h1TrendlineUp = h1.trendline_up;
+    const h1LastClose = h1.last_closed_close;
+    const h1Sma20 = h1.smas?.[0];
+    const bearishCtx = h1BBPos === "below_middle" || h1MAOrd === "bajista" || h1MAOrd === "mixto_bajista";
+    const trendlineBroken = h1TrendlineUp != null && h1LastClose != null && h1LastClose > h1TrendlineUp.value;
+    const ma20Broken = h1Sma20 != null && h1LastClose != null && h1LastClose > h1Sma20;
+    const m15Confirmed = m15BBPos === "above_middle" || m15MAOrd === "alcista";
+
+    if (bearishCtx || trendlineBroken || ma20Broken) {
+      const confirmed = [];
+      const pending = [];
+      if (bearishCtx) confirmed.push("H1 bajista (PC-001)");
+      if (trendlineBroken) confirmed.push("ruptura trendline H1"); else pending.push("ruptura trendline H1");
+      if (ma20Broken) confirmed.push("cierre sobre MA20 H1"); else pending.push("cierre sobre MA20 H1");
+      if (m15Confirmed) confirmed.push("M15 confirmación alcista"); else pending.push("M15 confirmación alcista");
+
+      const metCount = [trendlineBroken, ma20Broken, m15Confirmed].filter(Boolean).length;
+      const confidence = metCount === 3 ? "conditions_met" : metCount >= 1 ? "setup_forming" : "watch";
+
+      candidates.push({
+        id: "STRAT-01", position: "CALL", confidence,
+        note: `Cambio tendencia alcista: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
+      });
+    }
   }
 
-  // STRAT-02 PUT — Cambio tendencia a la baja (rules.json STRAT-02-PC-001)
-  // Solo detectable automáticamente: contexto H1 alcista (precondición).
-  if (h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista") {
-    candidates.push({
-      id: "STRAT-02", position: "PUT", confidence: "watch",
-      note: "H1 alcista (PC-001 ✅) → pendiente manual: ruptura trendline alcista H1 + cierre bajo MA20 H1 + confirmación M15 bajista",
-    });
+  // STRAT-02 PUT — Cambio tendencia a la baja (rules.json PC-001/TR-001/TR-002/CF-001)
+  // Automatizado 2026-07-13 — espejo de STRAT-01: trendline de soporte (mínimos,
+  // tfData.H1.trendline_dn), ruptura por debajo de SMA20 H1, confirmación M15 bajista.
+  // Ver comentario de STRAT-01 arriba.
+  {
+    const h1TrendlineDn = h1.trendline_dn;
+    const h1LastClose = h1.last_closed_close;
+    const h1Sma20 = h1.smas?.[0];
+    const bullishCtx = h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista";
+    const trendlineBroken = h1TrendlineDn != null && h1LastClose != null && h1LastClose < h1TrendlineDn.value;
+    const ma20Broken = h1Sma20 != null && h1LastClose != null && h1LastClose < h1Sma20;
+    const m15Confirmed = m15BBPos === "below_middle" || m15MAOrd === "bajista";
+
+    if (bullishCtx || trendlineBroken || ma20Broken) {
+      const confirmed = [];
+      const pending = [];
+      if (bullishCtx) confirmed.push("H1 alcista (PC-001)");
+      if (trendlineBroken) confirmed.push("ruptura trendline H1"); else pending.push("ruptura trendline H1");
+      if (ma20Broken) confirmed.push("cierre bajo MA20 H1"); else pending.push("cierre bajo MA20 H1");
+      if (m15Confirmed) confirmed.push("M15 confirmación bajista"); else pending.push("M15 confirmación bajista");
+
+      const metCount = [trendlineBroken, ma20Broken, m15Confirmed].filter(Boolean).length;
+      const confidence = metCount === 3 ? "conditions_met" : metCount >= 1 ? "setup_forming" : "watch";
+
+      candidates.push({
+        id: "STRAT-02", position: "PUT", confidence,
+        note: `Cambio tendencia bajista: ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
+      });
+    }
   }
 
   // STRAT-03 — non_operative en rules.json; no se emite.

@@ -9,7 +9,14 @@ import { join } from "path";
 import { homedir } from "os";
 import { z } from "zod";
 import { bbPosition, maOrder, screenStrategies } from "../core/signals.js";
+import { computeTrendlineAt } from "../core/trendline.js";
 import { jsonResult } from "../tools/_format.js";
+
+// Re-exportada para no romper imports existentes (tests/screener.test.js y
+// computeIndicatorsAt más abajo) — la implementación vive en core/trendline.js
+// desde 2026-07-13 para que watcher.js también pueda reusarla sin import circular
+// (screener.js ya importa de signals.js).
+export { computeTrendlineAt };
 
 const CACHE_DIR = join(homedir(), ".tradingview-mcp");
 
@@ -57,35 +64,6 @@ export function computeSMAsFromBars(closes, periods, index) {
     if (slice.length < period) return null;
     return parseFloat((slice.reduce((s, v) => s + v, 0) / slice.length).toFixed(4));
   });
-}
-
-/**
- * Linear regression trendline at bar `index`.
- * direction='up' uses highs, direction='down' uses lows.
- * Returns { slope, intercept, value } — value is the projected price at current bar.
- */
-export function computeTrendlineAt(bars, index, direction, lookback = 20) {
-  const start = Math.max(0, index - lookback);
-  const slice = bars.slice(start, index);
-  if (slice.length < 5) return null;
-  const n = slice.length;
-  const ys = direction === "up" ? slice.map((b) => b.high) : slice.map((b) => b.low);
-  const xs = ys.map((_, i) => i);
-  const sumX = xs.reduce((s, v) => s + v, 0);
-  const sumY = ys.reduce((s, v) => s + v, 0);
-  const sumXY = xs.reduce((s, x, i) => s + x * ys[i], 0);
-  const sumXX = xs.reduce((s, x) => s + x * x, 0);
-  const denom = n * sumXX - sumX * sumX;
-  if (denom === 0) return null;
-  const slope = (n * sumXY - sumX * sumY) / denom;
-  const intercept = (sumY - slope * sumX) / n;
-  // Value extrapolated one step past the slice (current bar)
-  const value = slope * n + intercept;
-  return {
-    slope: parseFloat(slope.toFixed(6)),
-    intercept: parseFloat(intercept.toFixed(4)),
-    value: parseFloat(value.toFixed(4)),
-  };
 }
 
 // ── OHLCV fetch + cache ───────────────────────────────────────────────────────
