@@ -165,7 +165,46 @@ export function screenStrategies(price, tfData, barTime = null) {
     }
   }
 
-  // STRAT-03 — non_operative en rules.json; no se emite.
+  // STRAT-03 PUT — Rebote en punto medio, tendencia a la baja (rules.json PC-001/PC-002/TR-001/CF-001/CF-002)
+  // Reactivada 2026-07-17 (era non_operative por decisión operativa reversible, sin bloqueo
+  // técnico). Contra-tendencia: D1 en baja de fondo (PC-001) mientras H1 rebota temporalmente
+  // al alza (PC-002); el rebote se acerca al punto medio D1 (TR-001, MA20/basis de Bollinger)
+  // sin cruzarlo; M15 confirma el rechazo (CF-001); el cierre de la última vela H1 YA CERRADA
+  // confirma que el rebote se agotó (CF-002).
+  // CF-002 usa el cierre de vela H1 cerrada vs SMA20 H1 (mismo patrón que STRAT-01/02), NO la
+  // categoría h1BBPos/h1MAOrd — esa categoría es la misma que exige PC-002 en sentido opuesto
+  // (alcista), así que usarla también para CF-002 haría el bloque estructuralmente imposible de
+  // disparar (mismo error que el fix de PC-001 OR/AND en STRAT-01/02 del 07-17).
+  {
+    const d1BearishCtx = d1BBPos === "below_middle" || d1MAOrd === "bajista" || d1MAOrd === "mixto_bajista";
+    const h1BullishCtx = h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista";
+
+    if (d1BearishCtx && h1BullishCtx) {
+      const d1Basis = d1.bb?.basis;
+      const d1Width = d1.bb?.width;
+      const NEAR_MID_FRACTION = 0.15;
+      const nearD1Mid = d1Basis != null && d1Width != null && price != null &&
+        Math.abs(price - d1Basis) <= d1Width * NEAR_MID_FRACTION;
+      const m15Rejects = m15BBPos === "below_middle" || m15MAOrd === "bajista" || m15MAOrd === "mixto_bajista";
+      const h1LastClose = h1.last_closed_close;
+      const h1Sma20 = h1.smas?.[0];
+      const h1BearishConfirm = h1Sma20 != null && h1LastClose != null && h1LastClose < h1Sma20;
+
+      const confirmed = ["D1 bajista (PC-001)", "H1 alcista - rebote (PC-002)"];
+      const pending = [];
+      if (nearD1Mid) confirmed.push("D1 cerca del punto medio"); else pending.push("D1 cerca del punto medio");
+      if (m15Rejects) confirmed.push("M15 rechazo bajista"); else pending.push("M15 rechazo bajista");
+      if (h1BearishConfirm) confirmed.push("vela H1 confirmación bajista"); else pending.push("vela H1 confirmación bajista");
+
+      const metCount = [nearD1Mid, m15Rejects, h1BearishConfirm].filter(Boolean).length;
+      const confidence = metCount === 3 ? "conditions_met" : metCount >= 1 ? "setup_forming" : "watch";
+
+      candidates.push({
+        id: "STRAT-03", position: "PUT", confidence,
+        note: `Rebote en punto medio (bajista): ${confirmed.map(x => x + " ✅").join(" + ")}${pending.map(x => " · " + x + " 🔲").join("")}`,
+      });
+    }
+  }
 
   // STRAT-04/05 — Apertura fuera de Bollinger (rules.json CF-002: primeros 5 min; TR-001: precio ya fuera de banda)
   // Gate: 09:30–09:35 ET (CF-002). Precio debe estar FUERA de la banda (TR-001 ya ocurrió).

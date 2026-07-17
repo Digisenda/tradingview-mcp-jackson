@@ -163,6 +163,50 @@ test("STRAT-02: trendline + MA20 + M15 confirmados (espejo bajista) → conditio
   assert.equal(s02.position, "PUT");
 });
 
+// ─── STRAT-03 — Rebote en punto medio, tendencia a la baja (reactivada 2026-07-17) ──
+
+test("STRAT-03: sin D1 bajista ni H1 alcista (precondiciones) → no se emite candidato", () => {
+  const tfData = {
+    D1: { bb_position: "above_middle", ma_order: "alcista", bb: { basis: 100, width: 10 } },
+    H1: { bb_position: "above_middle", ma_order: "alcista" },
+    M15: {},
+  };
+  const candidates = screenStrategies(100, tfData, null);
+  assert.equal(candidates.find((c) => c.id === "STRAT-03"), undefined);
+});
+
+test("STRAT-03: solo precondiciones (D1 bajista + H1 alcista) → watch", () => {
+  const tfData = {
+    D1: { bb_position: "below_middle", ma_order: "bajista", bb: { basis: 100, width: 10 } },
+    H1: { bb_position: "above_middle", ma_order: "alcista" },
+    M15: {},
+  };
+  const candidates = screenStrategies(150, tfData, null); // precio lejos del punto medio D1
+  const s03 = candidates.find((c) => c.id === "STRAT-03");
+  assert.ok(s03, "STRAT-03 debe emitirse solo con las 2 precondiciones");
+  assert.equal(s03.confidence, "watch");
+  assert.equal(s03.position, "PUT");
+});
+
+test("STRAT-03: precondiciones + D1 cerca del punto medio + M15 rechazo + vela H1 bajista → conditions_met", () => {
+  const tfData = {
+    D1: { bb_position: "below_middle", ma_order: "bajista", bb: { basis: 100, width: 10 } },
+    H1: {
+      bb_position: "above_middle", ma_order: "alcista",
+      smas: [105],
+      last_closed_close: 100, // cierra bajo MA20 H1 (105) — confirmación bajista (CF-002)
+    },
+    M15: { bb_position: "below_middle", ma_order: "bajista" },
+  };
+  const candidates = screenStrategies(101, tfData, null); // precio a 1 de basis(100), dentro del 15% de width(10)
+  const s03 = candidates.find((c) => c.id === "STRAT-03");
+  assert.ok(s03);
+  assert.equal(s03.confidence, "conditions_met");
+  assert.match(s03.note, /D1 cerca del punto medio ✅/);
+  assert.match(s03.note, /M15 rechazo bajista ✅/);
+  assert.match(s03.note, /vela H1 confirmación bajista ✅/);
+});
+
 // ─── Regresión 2026-07-17: PC-001 es AND obligatorio, no OR con los triggers ──
 // Bug real (signals-2026-07-17.jsonl, TSLA 13:47:37): con contexto H1 YA bajista
 // (bearishCtx del propio STRAT-01), los triggers de ruptura de STRAT-02 (que también

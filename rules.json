@@ -174,7 +174,7 @@
     {
       "id": "STRAT-03",
       "name": "Rebote en punto medio, tendencia a la baja",
-      "status": "non_operative",
+      "status": "operative",
       "position": "PUT",
       "primary_timeframe": "D1",
       "_source_page": 3,
@@ -227,12 +227,16 @@
           ]
         }
       ],
-      "non_operative_reason": "Desactivada por decisión operativa del usuario; se conserva completa como fuente histórica y puede reactivarse sin alterar sus reglas.",
       "_status_history": [
         {
           "date": "2026-06-20",
           "status": "non_operative",
           "reason": "Declarada no operativa por el usuario. Estrategia conservada íntegramente como fuente histórica y disponible para reactivación futura."
+        },
+        {
+          "date": "2026-07-17",
+          "status": "operative",
+          "reason": "Reactivada por el usuario para ampliar la cobertura de estrategias del vigía y comparar efectividad. Automatizada en signals.js con el mismo patrón de STRAT-01/02 (precondiciones como gate AND, close de vela H1 ya cerrada para la confirmación bajista)."
         }
       ]
     },
