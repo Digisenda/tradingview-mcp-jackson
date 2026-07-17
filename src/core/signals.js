@@ -104,6 +104,11 @@ export function screenStrategies(price, tfData, barTime = null) {
   // CF-001: M15 confirma alcista (bb_position/ma_order).
   // Se usa el cierre de vela YA CERRADA (last_closed_close), no el precio intradía en vivo,
   // para no disparar con una mecha que rompe y se devuelve — decisión explícita del usuario.
+  // PC-001 es precondición obligatoria (AND), no una alternativa a los triggers: rules.json
+  // la tipa como pre_condition, es el régimen de PARTIDA que TR-001/TR-002/CF-001 deben
+  // revertir. Con OR, STRAT-01/02 podían disparar por su cuenta con el contexto H1 opuesto
+  // al que exige su propia precondición — produciendo CALL y PUT contradictorios en el mismo
+  // tick para el mismo ticker (fix 2026-07-17, ver signals-2026-07-17.jsonl TSLA 13:47:37).
   {
     const h1TrendlineUp = h1.trendline_up;
     const h1LastClose = h1.last_closed_close;
@@ -113,10 +118,9 @@ export function screenStrategies(price, tfData, barTime = null) {
     const ma20Broken = h1Sma20 != null && h1LastClose != null && h1LastClose > h1Sma20;
     const m15Confirmed = m15BBPos === "above_middle" || m15MAOrd === "alcista";
 
-    if (bearishCtx || trendlineBroken || ma20Broken) {
-      const confirmed = [];
+    if (bearishCtx) {
+      const confirmed = ["H1 bajista (PC-001)"];
       const pending = [];
-      if (bearishCtx) confirmed.push("H1 bajista (PC-001)");
       if (trendlineBroken) confirmed.push("ruptura trendline H1"); else pending.push("ruptura trendline H1");
       if (ma20Broken) confirmed.push("cierre sobre MA20 H1"); else pending.push("cierre sobre MA20 H1");
       if (m15Confirmed) confirmed.push("M15 confirmación alcista"); else pending.push("M15 confirmación alcista");
@@ -134,7 +138,7 @@ export function screenStrategies(price, tfData, barTime = null) {
   // STRAT-02 PUT — Cambio tendencia a la baja (rules.json PC-001/TR-001/TR-002/CF-001)
   // Automatizado 2026-07-13 — espejo de STRAT-01: trendline de soporte (mínimos,
   // tfData.H1.trendline_dn), ruptura por debajo de SMA20 H1, confirmación M15 bajista.
-  // Ver comentario de STRAT-01 arriba.
+  // PC-001 es precondición obligatoria (AND) — ver comentario de STRAT-01 arriba.
   {
     const h1TrendlineDn = h1.trendline_dn;
     const h1LastClose = h1.last_closed_close;
@@ -144,10 +148,9 @@ export function screenStrategies(price, tfData, barTime = null) {
     const ma20Broken = h1Sma20 != null && h1LastClose != null && h1LastClose < h1Sma20;
     const m15Confirmed = m15BBPos === "below_middle" || m15MAOrd === "bajista";
 
-    if (bullishCtx || trendlineBroken || ma20Broken) {
-      const confirmed = [];
+    if (bullishCtx) {
+      const confirmed = ["H1 alcista (PC-001)"];
       const pending = [];
-      if (bullishCtx) confirmed.push("H1 alcista (PC-001)");
       if (trendlineBroken) confirmed.push("ruptura trendline H1"); else pending.push("ruptura trendline H1");
       if (ma20Broken) confirmed.push("cierre bajo MA20 H1"); else pending.push("cierre bajo MA20 H1");
       if (m15Confirmed) confirmed.push("M15 confirmación bajista"); else pending.push("M15 confirmación bajista");

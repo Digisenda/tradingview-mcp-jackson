@@ -162,3 +162,40 @@ test("STRAT-02: trendline + MA20 + M15 confirmados (espejo bajista) → conditio
   assert.equal(s02.confidence, "conditions_met");
   assert.equal(s02.position, "PUT");
 });
+
+// ─── Regresión 2026-07-17: PC-001 es AND obligatorio, no OR con los triggers ──
+// Bug real (signals-2026-07-17.jsonl, TSLA 13:47:37): con contexto H1 YA bajista
+// (bearishCtx del propio STRAT-01), los triggers de ruptura de STRAT-02 (que también
+// son ciertos porque el mercado sigue bajista) alcanzaban conditions_met sin que la
+// precondición de STRAT-02 (bullishCtx) fuera verdadera — CALL y PUT simultáneos
+// para el mismo ticker en el mismo tick.
+
+test("STRAT-01/02: contexto H1 bajista NO debe disparar STRAT-02 aunque sus triggers de ruptura sean ciertos", () => {
+  const tfData = {
+    D1: {}, M15: { bb_position: "below_middle", ma_order: "bajista" },
+    H1: {
+      bb_position: "below_middle", ma_order: "bajista", // bearishCtx=true, bullishCtx=false
+      smas: [110],
+      trendline_dn: { value: 108 },
+      last_closed_close: 100, // por debajo de trendline_dn y de MA20 — sería "trigger" de STRAT-02
+    },
+  };
+  const candidates = screenStrategies(100, tfData, null);
+  assert.ok(candidates.find((c) => c.id === "STRAT-01"), "STRAT-01 sí debe emitirse (su precondición es cierta)");
+  assert.equal(candidates.find((c) => c.id === "STRAT-02"), undefined, "STRAT-02 no debe emitirse sin su propia precondición (bullishCtx)");
+});
+
+test("STRAT-01/02: nunca deben coexistir CALL y PUT para el mismo tick (mutuamente excluyentes por PC-001)", () => {
+  const tfData = {
+    D1: {}, M15: { bb_position: "above_middle", ma_order: "alcista" },
+    H1: {
+      bb_position: "above_middle", ma_order: "alcista", // bullishCtx=true, bearishCtx=false
+      smas: [90],
+      trendline_up: { value: 95 },
+      last_closed_close: 100, // por encima de trendline_up y de MA20 — sería "trigger" de STRAT-01
+    },
+  };
+  const candidates = screenStrategies(100, tfData, null);
+  assert.equal(candidates.find((c) => c.id === "STRAT-01"), undefined, "STRAT-01 no debe emitirse sin su propia precondición (bearishCtx)");
+  assert.ok(candidates.find((c) => c.id === "STRAT-02"), "STRAT-02 sí debe emitirse (su precondición es cierta)");
+});
