@@ -137,6 +137,28 @@ test("STRAT-01: trendline + MA20 + M15 confirmados → conditions_met", () => {
   assert.match(s01.note, /M15 confirmación alcista ✅/);
 });
 
+// Regresión 2026-07-17: bb_position solo (un cruce puntual de la banda media) ya no basta
+// para "M15 confirmación alcista" — reportado en vivo: el sistema marcó M15 alcista con el
+// día "girado a la baja" todo el tiempo (ma_order bajista/mixto_bajista real), porque un
+// rebote transitorio cruzó la banda media (bb_position="above_middle") en el instante del
+// snapshot (recordar: tfData M15 solo se refresca cada ~5 min).
+test("STRAT-01: M15 con bb_position 'above_middle' pero ma_order bajista NO cuenta como confirmación", () => {
+  const tfData = {
+    D1: {}, M15: { bb_position: "above_middle", ma_order: "mixto_bajista" }, // rebote transitorio, tendencia real bajista
+    H1: {
+      bb_position: "below_middle", ma_order: "bajista",
+      smas: [98],
+      trendline_up: { value: 100 },
+      last_closed_close: 105, // rompe trendline (100) y MA20 (98)
+    },
+  };
+  const candidates = screenStrategies(105, tfData, null);
+  const s01 = candidates.find((c) => c.id === "STRAT-01");
+  assert.ok(s01);
+  assert.equal(s01.confidence, "setup_forming", "no debe llegar a conditions_met sin confirmación M15 real");
+  assert.match(s01.note, /M15 confirmación alcista 🔲/);
+});
+
 test("STRAT-01: sin ningún contexto/ruptura → no se emite candidato", () => {
   const tfData = {
     D1: {}, M15: {},

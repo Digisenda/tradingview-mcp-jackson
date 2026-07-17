@@ -101,7 +101,13 @@ export function screenStrategies(price, tfData, barTime = null) {
   //   (regresión lineal sobre máximos, 20 velas H1 — tfData.H1.trendline_up, calculada en
   //   watcher.js desde OHLCV real vía computeTrendlineAt()).
   // TR-002: cierre de esa misma vela H1 por encima de la SMA20 H1 (vela de confirmación).
-  // CF-001: M15 confirma alcista (bb_position/ma_order).
+  // CF-001: M15 confirma alcista — requiere que la disposición de medias (ma_order) sea
+  // franca/mixta alcista. Antes bastaba con m15BBPos==="above_middle" (precio sobre la banda
+  // media) por sí solo, un chequeo de un único instante que un rebote transitorio satisface
+  // aunque la disposición real de medias del día siga bajista — bug reportado en vivo
+  // 2026-07-17 (M15 marcado "confirmación alcista" con el día "girado a la baja" todo el
+  // tiempo). ma_order ya exige el criterio completo de disposición ("verificar que la
+  // tendencia se muestre TOTALMENTE alcista", rules.yaml STRAT-01-CF-001).
   // Se usa el cierre de vela YA CERRADA (last_closed_close), no el precio intradía en vivo,
   // para no disparar con una mecha que rompe y se devuelve — decisión explícita del usuario.
   // PC-001 es precondición obligatoria (AND), no una alternativa a los triggers: rules.json
@@ -116,7 +122,7 @@ export function screenStrategies(price, tfData, barTime = null) {
     const bearishCtx = h1BBPos === "below_middle" || h1MAOrd === "bajista" || h1MAOrd === "mixto_bajista";
     const trendlineBroken = h1TrendlineUp != null && h1LastClose != null && h1LastClose > h1TrendlineUp.value;
     const ma20Broken = h1Sma20 != null && h1LastClose != null && h1LastClose > h1Sma20;
-    const m15Confirmed = m15BBPos === "above_middle" || m15MAOrd === "alcista";
+    const m15Confirmed = m15MAOrd === "alcista" || m15MAOrd === "mixto_alcista";
 
     if (bearishCtx) {
       const confirmed = ["H1 bajista (PC-001)"];
@@ -146,7 +152,8 @@ export function screenStrategies(price, tfData, barTime = null) {
     const bullishCtx = h1BBPos === "above_middle" || h1MAOrd === "alcista" || h1MAOrd === "mixto_alcista";
     const trendlineBroken = h1TrendlineDn != null && h1LastClose != null && h1LastClose < h1TrendlineDn.value;
     const ma20Broken = h1Sma20 != null && h1LastClose != null && h1LastClose < h1Sma20;
-    const m15Confirmed = m15BBPos === "below_middle" || m15MAOrd === "bajista";
+    // CF-001 M15: ver comentario en STRAT-01 (2026-07-17) — ma_order en vez de bb_position solo.
+    const m15Confirmed = m15MAOrd === "bajista" || m15MAOrd === "mixto_bajista";
 
     if (bullishCtx) {
       const confirmed = ["H1 alcista (PC-001)"];
@@ -185,7 +192,8 @@ export function screenStrategies(price, tfData, barTime = null) {
       const NEAR_MID_FRACTION = 0.15;
       const nearD1Mid = d1Basis != null && d1Width != null && price != null &&
         Math.abs(price - d1Basis) <= d1Width * NEAR_MID_FRACTION;
-      const m15Rejects = m15BBPos === "below_middle" || m15MAOrd === "bajista" || m15MAOrd === "mixto_bajista";
+      // CF-001 M15: ver comentario en STRAT-01 (2026-07-17) — ma_order en vez de bb_position solo.
+      const m15Rejects = m15MAOrd === "bajista" || m15MAOrd === "mixto_bajista";
       const h1LastClose = h1.last_closed_close;
       const h1Sma20 = h1.smas?.[0];
       const h1BearishConfirm = h1Sma20 != null && h1LastClose != null && h1LastClose < h1Sma20;

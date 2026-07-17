@@ -128,6 +128,41 @@ describe("computeTrendlineAt", () => {
     // lows = close - 1, highs = close + 1 → different intercepts
     assert.notEqual(tlUp.intercept, tlDn.intercept);
   });
+
+  // Regresión 2026-07-17: una regresión OLS pura pasa por el MEDIO de los datos (mitad
+  // de los máximos por encima de la línea, mitad por debajo) — no es una envolvente de
+  // resistencia/soporte como pide rules.yaml ("bordeando levemente por encima/debajo la
+  // mayor cantidad de puntos posibles"). Reportado en vivo: el precio "rompía" una
+  // trendline que en el chart real no había tocado, porque la línea OLS quedaba
+  // sistemáticamente demasiado baja/alta.
+
+  test("envelope: la trendline 'up' queda al o por encima de TODOS los máximos de la ventana (no OLS puro)", () => {
+    const highs = [110, 105, 108, 100, 103, 95, 98, 90, 93, 85, 88, 80, 83, 75, 78, 70, 73, 65, 68, 60, 63];
+    const bars = highs.map((h, i) => ({
+      time: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+      open: h - 2, high: h, low: h - 5, close: h - 2, volume: 1000,
+    }));
+    const tl = computeTrendlineAt(bars, bars.length, "up", bars.length);
+    assert.ok(tl !== null);
+    highs.forEach((h, i) => {
+      const lineValue = tl.slope * i + tl.intercept;
+      assert.ok(lineValue >= h - 1e-6, `high[${i}]=${h} quedó por ENCIMA de la envolvente (línea=${lineValue.toFixed(4)})`);
+    });
+  });
+
+  test("envelope: la trendline 'down' queda al o por debajo de TODOS los mínimos de la ventana (no OLS puro)", () => {
+    const lows = [60, 65, 63, 70, 68, 75, 73, 80, 78, 85, 83, 90, 88, 95, 93, 100, 98, 105, 103, 110, 108];
+    const bars = lows.map((l, i) => ({
+      time: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+      open: l + 2, high: l + 5, low: l, close: l + 2, volume: 1000,
+    }));
+    const tl = computeTrendlineAt(bars, bars.length, "down", bars.length);
+    assert.ok(tl !== null);
+    lows.forEach((l, i) => {
+      const lineValue = tl.slope * i + tl.intercept;
+      assert.ok(lineValue <= l + 1e-6, `low[${i}]=${l} quedó por DEBAJO de la envolvente (línea=${lineValue.toFixed(4)})`);
+    });
+  });
 });
 
 // ── computeStrat12Context ────────────────────────────────────────────────────
