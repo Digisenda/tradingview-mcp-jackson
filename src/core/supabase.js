@@ -116,7 +116,7 @@ export async function saveSignals(signals = []) {
       s.source ?? null,
     ]);
 
-    await sql(
+    await sql.query(
       `INSERT INTO signals (${cols.join(", ")}) VALUES ${placeholders}
        ON CONFLICT (signal_code) DO UPDATE
          SET confidence = EXCLUDED.confidence,
