@@ -28,7 +28,8 @@ import {
   screenStrategies,
 } from "./src/core/signals.js";
 import { computeTrendlineAt } from "./src/core/trendline.js";
-import { onSignal, onTick, onSessionEnd, reportStartupState } from "./paper-executor.js";
+import { onSignal, onTick, onSessionEnd, reportStartupState, expireStalePositions } from "./paper-executor.js";
+import { loadOpenPositions } from "./paper-ledger.js";
 import * as fundamentals from "./src/core/fundamentals.js";
 import { renderUnifiedDashboard } from "./src/core/dashboard.js";
 import { weekDirFor } from "./src/core/paths.js";
@@ -601,6 +602,43 @@ async function runTick(rules) {
   }
 }
 
+// Fetches a fresh quote per ticker that has an open position carried over from a
+// prior ET trading day, then hands them to expireStalePositions() so same-day-only
+// strategies don't sit open forever just because the process was restarted after
+// the user stopped it mid-session (see expireStalePositions() docstring).
+async function expireCarriedOverPositions(rules) {
+  const positions = loadOpenPositions();
+  if (positions.length === 0) return;
+
+  const origState = await chart.getState().catch(() => null);
+  const tickers = [...new Set(positions.map((p) => p.ticker))];
+  const priceByTicker = new Map();
+
+  for (const symbol of tickers) {
+    try {
+      const q = await data.getQuote({ symbol });
+      if (q?.success) priceByTicker.set(symbol, q.last ?? q.close ?? null);
+    } catch {
+      // best-effort — leave unpriced, expireStalePositions() will skip it
+    }
+  }
+
+  if (origState?.symbol) {
+    await chart.setSymbol({ symbol: origState.symbol }).catch(() => {});
+    if (origState?.resolution) {
+      await chart.setTimeframe({ timeframe: origState.resolution }).catch(() => {});
+    }
+  }
+
+  const { expiredCount, skipped } = expireStalePositions(rules, priceByTicker);
+  if (expiredCount > 0) {
+    console.log(`[PAPER] 🧹 ${expiredCount} posición(es) de sesiones anteriores expiradas al reiniciar.`);
+  }
+  if (skipped.length > 0) {
+    console.warn(`[PAPER] ⚠️ ${skipped.length} posición(es) no se pudieron expirar (sin precio disponible) — seguirán reportándose.`);
+  }
+}
+
 // ─── Entry point ──────────────────────────────────────────────────────────────
 
 async function main() {
@@ -620,7 +658,10 @@ async function main() {
   console.log(`  Paper trd : ${paperEnabled ? `ACTIVO (min_score=${rules.paper_trading.min_score ?? 60})` : "DESACTIVADO (enabled=false)"}`);
   console.log("  Ctrl+C para detener\n");
 
-  if (paperEnabled) reportStartupState();
+  if (paperEnabled) {
+    await expireCarriedOverPositions(rules);
+    reportStartupState();
+  }
 
   // D3: FED/earnings 1x por sesión — antes del primer tick para que
   // buildVetoFlags() tenga datos desde la primera señal.

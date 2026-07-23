@@ -16,6 +16,8 @@ import {
   hasOpenPosition,
   ledgerPath,
   loadOpenPositions,
+  todayET,
+  etDateFromISO,
 } from "./paper-ledger.js";
 
 // ─── Score mapping ────────────────────────────────────────────────────────────
@@ -146,6 +148,54 @@ export async function onSessionEnd(ticker, lastPrice, rules = null) {
   } catch (e) {
     console.error("[PAPER] ⚠️ Error en onSessionEnd:", e.message);
   }
+}
+
+// ─── Carried-over position cleanup ───────────────────────────────────────────
+
+/**
+ * Expire positions opened on a prior ET trading day that don't have an overnight
+ * exit_override (e.g. STRAT-12). onSessionEnd() only fires when the SAME watcher
+ * process is still alive at market close — since the normal workflow is to stop
+ * the vigía with Ctrl+C once the user is done trading (well before 16:00 ET), that
+ * path never runs and same-day-only strategies (STRAT-01/02/etc.) can accumulate
+ * indefinitely in open-positions.json across restarts. Call this once at startup,
+ * before reportStartupState(), so stale positions get closed with a real price
+ * instead of being re-reported forever.
+ *
+ * @param {object} rules  parsed rules.json — used to look up exit_override per strategy
+ * @param {Map<string, number>} priceByTicker  fresh quote per ticker that has a stale position
+ * @returns {{ expiredCount: number, skipped: string[] }}  skipped = position ids left open (no price available)
+ */
+export function expireStalePositions(rules, priceByTicker) {
+  const positions = loadOpenPositions();
+  const today = todayET();
+  const strategies = rules?.strategies || [];
+  let expiredCount = 0;
+  const skipped = [];
+
+  for (const pos of positions) {
+    const posDay = etDateFromISO(pos.opened_at);
+    if (posDay === today) continue; // opened today — leave to normal OCO/session-end handling
+
+    const stratDef = strategies.find((s) => s.id === pos.strategy_id);
+    const holdsOvernight = stratDef?.exit_override?.sell_at_market_open === false;
+    if (holdsOvernight) continue; // e.g. STRAT-12 — legitimately carried over
+
+    const price = priceByTicker.get(pos.ticker);
+    if (price == null || price <= 0) {
+      skipped.push(pos.id);
+      continue;
+    }
+
+    closePosition(pos.id, price, "expiry");
+    console.log(
+      `[PAPER] 🧹 ${pos.ticker} ${pos.side} ${pos.strategy_id} — expirada al reiniciar` +
+      ` (abierta ${posDay}, sin exit_override overnight) @$${price}`
+    );
+    expiredCount++;
+  }
+
+  return { expiredCount, skipped };
 }
 
 // ─── Startup report ───────────────────────────────────────────────────────────

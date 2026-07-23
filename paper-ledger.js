@@ -25,8 +25,9 @@ function ledgerDir() {
   return dir;
 }
 
-function todayET() {
-  return new Date()
+/** ET calendar date (YYYY-MM-DD) for an arbitrary ISO timestamp. */
+export function etDateFromISO(iso) {
+  return new Date(iso)
     .toLocaleString("en-US", {
       timeZone: "America/New_York",
       year: "numeric",
@@ -34,6 +35,10 @@ function todayET() {
       day: "2-digit",
     })
     .replace(/(\d+)\/(\d+)\/(\d+)/, "$3-$1-$2");
+}
+
+export function todayET() {
+  return etDateFromISO(new Date().toISOString());
 }
 
 function ledgerFilePath() {
@@ -73,11 +78,16 @@ function saveOpenPositions(positions) {
  */
 export function openPosition(pos) {
   const positions = loadOpenPositions();
+  // CALL profits when the underlying rises, so target sits above entry and stop below.
+  // PUT profits when the underlying falls, so the bands are mirrored.
+  const isPut = pos.side === "PUT";
+  const targetMult = isPut ? 0.88 : 1.12;
+  const stopMult = isPut ? 1.15 : 0.85;
   const entry = {
     ...pos,
     opened_at: new Date().toISOString(),
-    target_price_underlying: parseFloat((pos.underlying_entry_price * 1.12).toFixed(4)),
-    stop_price_underlying: parseFloat((pos.underlying_entry_price * 0.85).toFixed(4)),
+    target_price_underlying: parseFloat((pos.underlying_entry_price * targetMult).toFixed(4)),
+    stop_price_underlying: parseFloat((pos.underlying_entry_price * stopMult).toFixed(4)),
   };
   positions.push(entry);
   saveOpenPositions(positions);
@@ -103,7 +113,9 @@ export function closePosition(posId, exitPrice, exitReason) {
   positions.splice(idx, 1);
   saveOpenPositions(positions);
 
-  const priceDelta = exitPrice - pos.underlying_entry_price;
+  const rawDelta = exitPrice - pos.underlying_entry_price;
+  // PUT profits on a price drop — flip the sign so R_result stays positive on a win either way.
+  const priceDelta = pos.side === "PUT" ? -rawDelta : rawDelta;
   const riskAmount = pos.underlying_entry_price * 0.15;
   const R_result = parseFloat((priceDelta / riskAmount).toFixed(3));
 
@@ -145,10 +157,20 @@ export function checkOCO(ticker, currentPrice) {
   for (const pos of positions) {
     if (pos.ticker !== ticker) continue;
 
-    if (currentPrice >= pos.target_price_underlying) {
+    // CALL: target is above entry (price rising), stop is below.
+    // PUT: mirrored — target is below entry (price falling), stop is above.
+    const isPut = pos.side === "PUT";
+    const hitTarget = isPut
+      ? currentPrice <= pos.target_price_underlying
+      : currentPrice >= pos.target_price_underlying;
+    const hitStop = isPut
+      ? currentPrice >= pos.stop_price_underlying
+      : currentPrice <= pos.stop_price_underlying;
+
+    if (hitTarget) {
       closePosition(pos.id, currentPrice, "target");
       closed.push(pos.id);
-    } else if (currentPrice <= pos.stop_price_underlying) {
+    } else if (hitStop) {
       closePosition(pos.id, currentPrice, "stop");
       closed.push(pos.id);
     }

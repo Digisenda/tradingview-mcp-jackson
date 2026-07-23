@@ -8,7 +8,7 @@
 
 import { test, describe, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync } from "node:fs";
+import { mkdirSync, rmSync, existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -18,7 +18,7 @@ process.env.PAPER_LEDGER_DIR = TEST_DIR;
 mkdirSync(TEST_DIR, { recursive: true });
 
 // Static imports (resolved after env is set)
-import { scoreFromConfidence, onSignal, onSessionEnd } from "../paper-executor.js";
+import { scoreFromConfidence, onSignal, onSessionEnd, expireStalePositions } from "../paper-executor.js";
 import {
   openPosition,
   checkOCO,
@@ -72,21 +72,57 @@ describe("checkOCO — target and stop detection", () => {
     assert.equal(loadOpenPositions().find((p) => p.id === "OCO-T1-NVDA-CALL"), undefined);
   });
 
-  test("stop hit: closes position when price <= stop", () => {
+  test("stop hit (CALL): closes position when price <= stop", () => {
     openPosition({
-      id: "OCO-T2-TSLA-PUT",
+      id: "OCO-T2-TSLA-CALL",
       ticker: "TSLA",
       strategy_id: "STRAT-13",
-      side: "PUT",
+      side: "CALL",
       confidence: "setup_forming",
       score: 60,
       underlying_entry_price: 200.00,
       veto_flags: [],
     });
-    const pos = loadOpenPositions().find((p) => p.id === "OCO-T2-TSLA-PUT");
+    const pos = loadOpenPositions().find((p) => p.id === "OCO-T2-TSLA-CALL");
     // stop = 200 * 0.85 = 170
     const closed = checkOCO("TSLA", pos.stop_price_underlying - 1);
-    assert.ok(closed.includes("OCO-T2-TSLA-PUT"), "should close on stop hit");
+    assert.ok(closed.includes("OCO-T2-TSLA-CALL"), "should close on stop hit");
+  });
+
+  test("target hit (PUT): closes position when price falls to/below target (mirrored bands)", () => {
+    openPosition({
+      id: "OCO-T4-TSLA-PUT",
+      ticker: "TSLA",
+      strategy_id: "STRAT-13",
+      side: "PUT",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    const pos = loadOpenPositions().find((p) => p.id === "OCO-T4-TSLA-PUT");
+    // PUT target = 200 * 0.88 = 176 (profits when price drops)
+    assert.equal(pos.target_price_underlying, 176.0);
+    const closed = checkOCO("TSLA", pos.target_price_underlying - 1);
+    assert.ok(closed.includes("OCO-T4-TSLA-PUT"), "should close on target hit when price drops for a PUT");
+  });
+
+  test("stop hit (PUT): closes position when price rises to/above stop (mirrored bands)", () => {
+    openPosition({
+      id: "OCO-T5-TSLA-PUT",
+      ticker: "TSLA",
+      strategy_id: "STRAT-13",
+      side: "PUT",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    const pos = loadOpenPositions().find((p) => p.id === "OCO-T5-TSLA-PUT");
+    // PUT stop = 200 * 1.15 = 230 (loses when price rises)
+    assert.equal(pos.stop_price_underlying, 230.0);
+    const closed = checkOCO("TSLA", pos.stop_price_underlying + 1);
+    assert.ok(closed.includes("OCO-T5-TSLA-PUT"), "should close on stop hit when price rises for a PUT");
   });
 
   test("no close when price is between stop and target", () => {
@@ -138,6 +174,140 @@ describe("closePosition — JSONL output", () => {
     assert.ok(trade.closed_at, "closed_at should be set");
     assert.match(trade.proxy_note, /proxy subyacente/, "proxy_note should mention proxy");
     assert.equal(trade.note, undefined, "note should not be overwritten by proxy_note");
+  });
+});
+
+// ─── closePosition — R_result sign respects side ─────────────────────────────
+
+describe("closePosition — R_result respects CALL/PUT direction", () => {
+  before(() => clearOpenPositions());
+
+  test("PUT: price drop (favorable) yields positive R_result", () => {
+    openPosition({
+      id: "R-TEST-NVDA-PUT",
+      ticker: "NVDA",
+      strategy_id: "STRAT-13",
+      side: "PUT",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    // Price fell from 200 to 190 — a win for a PUT, even though exitPrice < entry.
+    const trade = closePosition("R-TEST-NVDA-PUT", 190.00, "target");
+    assert.ok(trade.R_result > 0, "PUT profiting from a price drop should show positive R");
+  });
+
+  test("PUT: price rise (unfavorable) yields negative R_result", () => {
+    openPosition({
+      id: "R-TEST-TSLA-PUT",
+      ticker: "TSLA",
+      strategy_id: "STRAT-13",
+      side: "PUT",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    // Price rose from 200 to 210 — a loss for a PUT.
+    const trade = closePosition("R-TEST-TSLA-PUT", 210.00, "stop");
+    assert.ok(trade.R_result < 0, "PUT losing from a price rise should show negative R");
+  });
+});
+
+// ─── expireStalePositions — carried-over cleanup at startup ──────────────────
+
+describe("expireStalePositions — closes prior-day positions without overnight override", () => {
+  beforeEach(() => clearOpenPositions());
+
+  test("expires a same-strategy position opened on a previous ET day, given a price", () => {
+    openPosition({
+      id: "STALE-TEST-NVDA-CALL",
+      ticker: "NVDA",
+      strategy_id: "STRAT-01",
+      side: "CALL",
+      confidence: "setup_forming",
+      score: 60,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    // Force opened_at to a prior day so it's picked up as carried-over.
+    const positions = loadOpenPositions();
+    const pos = positions.find((p) => p.id === "STALE-TEST-NVDA-CALL");
+    pos.opened_at = "2020-01-01T14:00:00.000Z";
+    writeFileSync(join(TEST_DIR, "open-positions.json"), JSON.stringify(positions, null, 2), "utf8");
+
+    const rules = { strategies: [{ id: "STRAT-01" }] };
+    const { expiredCount, skipped } = expireStalePositions(rules, new Map([["NVDA", 205.00]]));
+
+    assert.equal(expiredCount, 1, "should expire the one stale position");
+    assert.equal(skipped.length, 0);
+    assert.equal(loadOpenPositions().find((p) => p.id === "STALE-TEST-NVDA-CALL"), undefined);
+  });
+
+  test("leaves a STRAT-12 (overnight) position open regardless of age", () => {
+    openPosition({
+      id: "STALE-TEST-NVDA-STRAT12",
+      ticker: "NVDA",
+      strategy_id: "STRAT-12",
+      side: "CALL",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    const positions = loadOpenPositions();
+    const pos = positions.find((p) => p.id === "STALE-TEST-NVDA-STRAT12");
+    pos.opened_at = "2020-01-01T14:00:00.000Z";
+    writeFileSync(join(TEST_DIR, "open-positions.json"), JSON.stringify(positions, null, 2), "utf8");
+
+    const rules = { strategies: [{ id: "STRAT-12", exit_override: { sell_at_market_open: false } }] };
+    const { expiredCount } = expireStalePositions(rules, new Map([["NVDA", 205.00]]));
+
+    assert.equal(expiredCount, 0, "STRAT-12 should not be expired by startup cleanup");
+    assert.ok(loadOpenPositions().find((p) => p.id === "STALE-TEST-NVDA-STRAT12"), "position should remain open");
+  });
+
+  test("skips (leaves open) a stale position when no price is available for its ticker", () => {
+    openPosition({
+      id: "STALE-TEST-TSLA-NOPRICE",
+      ticker: "TSLA",
+      strategy_id: "STRAT-01",
+      side: "CALL",
+      confidence: "setup_forming",
+      score: 60,
+      underlying_entry_price: 300.00,
+      veto_flags: [],
+    });
+    const positions = loadOpenPositions();
+    const pos = positions.find((p) => p.id === "STALE-TEST-TSLA-NOPRICE");
+    pos.opened_at = "2020-01-01T14:00:00.000Z";
+    writeFileSync(join(TEST_DIR, "open-positions.json"), JSON.stringify(positions, null, 2), "utf8");
+
+    const rules = { strategies: [{ id: "STRAT-01" }] };
+    const { expiredCount, skipped } = expireStalePositions(rules, new Map()); // no price for TSLA
+
+    assert.equal(expiredCount, 0);
+    assert.ok(skipped.includes("STALE-TEST-TSLA-NOPRICE"));
+    assert.ok(loadOpenPositions().find((p) => p.id === "STALE-TEST-TSLA-NOPRICE"), "position stays open without a price");
+  });
+
+  test("does not touch a position opened today", () => {
+    openPosition({
+      id: "TODAY-TEST-NVDA-CALL",
+      ticker: "NVDA",
+      strategy_id: "STRAT-01",
+      side: "CALL",
+      confidence: "setup_forming",
+      score: 60,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    const rules = { strategies: [{ id: "STRAT-01" }] };
+    const { expiredCount } = expireStalePositions(rules, new Map([["NVDA", 205.00]]));
+
+    assert.equal(expiredCount, 0, "a position opened today should be left for normal OCO/session-end handling");
+    assert.ok(loadOpenPositions().find((p) => p.id === "TODAY-TEST-NVDA-CALL"));
   });
 });
 
