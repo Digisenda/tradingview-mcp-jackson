@@ -20,6 +20,8 @@ import { fileURLToPath } from "node:url";
 
 import * as chart from "./src/core/chart.js";
 import * as data from "./src/core/data.js";
+import * as tab from "./src/core/tab.js";
+import { pinToChartId } from "./src/connection.js";
 import {
   extractBB,
   extractSMAs,
@@ -90,6 +92,15 @@ export function isInSessionWindow(sessionStr) {
   const end = parseInt(match[3]) * 60 + parseInt(match[4]);
   const hm = nowHM();
   return hm >= start && hm <= end;
+}
+
+// True once today's primary_window has already closed (strictly after the end
+// boundary — isInSessionWindow's <= end still counts as "in session").
+export function isPastSessionWindow(sessionStr) {
+  const match = (sessionStr || "09:30–16:00 ET").match(/(\d{1,2}):(\d{2})[–-](\d{1,2}):(\d{2})/);
+  if (!match) return false;
+  const end = parseInt(match[3]) * 60 + parseInt(match[4]);
+  return nowHM() > end;
 }
 
 // True during the `warmupMinutes` window right before primary_window opens.
@@ -630,13 +641,54 @@ async function expireCarriedOverPositions(rules) {
     }
   }
 
-  const { expiredCount, skipped } = expireStalePositions(rules, priceByTicker);
+  const sessionEndedToday = isPastSessionWindow(rules.session?.primary_window);
+  const { expiredCount, skipped } = expireStalePositions(rules, priceByTicker, { sessionEndedToday });
   if (expiredCount > 0) {
-    console.log(`[PAPER] 🧹 ${expiredCount} posición(es) de sesiones anteriores expiradas al reiniciar.`);
+    console.log(`[PAPER] 🧹 ${expiredCount} posición(es) expiradas al reiniciar` +
+      (sessionEndedToday ? " (incluye posiciones de hoy — la sesión ya cerró)." : " (de sesiones anteriores)."));
   }
   if (skipped.length > 0) {
     console.warn(`[PAPER] ⚠️ ${skipped.length} posición(es) no se pudieron expirar (sin precio disponible) — seguirán reportándose.`);
   }
+}
+
+// ─── Tab pinning ──────────────────────────────────────────────────────────────
+// Multiple TradingView tabs open at once (e.g. manual-trading tabs alongside
+// the one vigía should drive) all share the same URL shape — CDP has no way
+// to tell them apart except by the chart_id segment. Without pinning, the CDP
+// layer silently adopts whichever tab is first in its list and drives it for
+// the whole run, which can mean vigía reads and mutates (chart.setSymbol) a
+// tab someone is actively using for manual trading instead of its own —
+// this is what caused NVDA/TSLA price cross-contamination in the paper
+// ledger on 2026-07-01 and 2026-07-16. With 2+ tabs open, refuse to guess.
+async function pinVigiaTab() {
+  const { tabs = [] } = await tab.list().catch(() => ({ tabs: [] }));
+  if (tabs.length <= 1) return; // no ambiguity — default (first/only match) is safe
+
+  const listing = tabs.map((t) => `    [chart_id=${t.chart_id || "?"}] ${t.title}`).join("\n");
+  const envChartId = process.env.VIGIA_CHART_ID?.trim();
+
+  if (!envChartId) {
+    console.error(
+      `\n[VIGIA] ❌ ${tabs.length} pestañas de TradingView abiertas — no se puede saber cuál es la de vigía.\n` +
+      `${listing}\n` +
+      `  Configura VIGIA_CHART_ID en .env con el chart_id de la pestaña dedicada a vigía y reinicia.\n`
+    );
+    process.exit(1);
+  }
+
+  const match = tabs.find((t) => t.chart_id === envChartId);
+  if (!match) {
+    console.error(
+      `\n[VIGIA] ❌ VIGIA_CHART_ID=${envChartId} no coincide con ninguna pestaña abierta.\n` +
+      `${listing}\n` +
+      `  Actualiza VIGIA_CHART_ID en .env con uno de los chart_id de arriba y reinicia.\n`
+    );
+    process.exit(1);
+  }
+
+  pinToChartId(envChartId);
+  console.log(`[VIGIA] 📌 Anclado a pestaña: ${match.title} (chart_id=${envChartId})`);
 }
 
 // ─── Entry point ──────────────────────────────────────────────────────────────
@@ -646,6 +698,8 @@ async function main() {
   console.log("  VIGÍA — Detector de señales en tiempo real");
   console.log(`  Modo: ${DRY_RUN ? "DRY-RUN (sin alertas reales)" : "ACTIVO"}`);
   console.log("═══════════════════════════════════════════════════");
+
+  await pinVigiaTab();
 
   const { rules, path: rulesFrom } = loadRules();
   console.log(`  rules.json: ${rulesFrom}`);

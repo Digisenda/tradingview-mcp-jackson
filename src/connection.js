@@ -2,10 +2,63 @@ import CDP from 'chrome-remote-interface';
 
 let client = null;
 let targetInfo = null;
+let pinnedChartId = null;
 const CDP_HOST = 'localhost';
 const CDP_PORT = 9222;
 const MAX_RETRIES = 5;
 const BASE_DELAY = 500;
+
+// ─── Tab pinning ────────────────────────────────────────────────────────────
+// With multiple TradingView tabs open at once (e.g. two for manual trading +
+// one dedicated to a long-running process like watcher.js), every chart tab's
+// URL matches the same /tradingview\.com\/chart/ pattern — there is no way to
+// tell them apart by URL shape alone. Without pinning, whichever tab happens
+// to be first in CDP's /json/list gets silently adopted and driven for the
+// entire process lifetime, which can mean reading (and mutating, via
+// chart.setSymbol) someone else's live manual-trading tab instead of the
+// intended one. Call pinToChartId() once at process startup (e.g. watcher.js)
+// with the chart_id segment from that tab's URL (tab_list already extracts
+// it) to force every connect/reconnect to target that exact tab, and fail
+// loudly instead of guessing if it isn't found.
+export function pinToChartId(chartId) {
+  pinnedChartId = chartId || null;
+  // Force a fresh connect on the next call so the pin takes effect immediately
+  // even if a client is already connected to a different (unpinned) target.
+  if (client) {
+    try { client.close(); } catch {}
+  }
+  client = null;
+  targetInfo = null;
+}
+
+export function getPinnedChartId() {
+  return pinnedChartId;
+}
+
+function extractChartId(url) {
+  return url.match(/\/chart\/([^/?]+)/)?.[1] || null;
+}
+
+/** Pure selection logic — exported for unit testing without a live CDP connection. */
+export function selectChartTarget(targets, pinnedId = pinnedChartId) {
+  const pages = targets.filter((t) => t.type === 'page' && /tradingview\.com\/chart/i.test(t.url));
+
+  if (pinnedId) {
+    const pinned = pages.find((t) => extractChartId(t.url) === pinnedId);
+    if (pinned) return pinned;
+    const available = pages
+      .map((t) => `${extractChartId(t.url) || '?'} (${t.title})`)
+      .join(', ') || 'ninguna';
+    throw new Error(
+      `Pestaña anclada no encontrada (chart_id=${pinnedId}). Pestañas TradingView abiertas: ${available}. ` +
+      `Verifica que esa pestaña sigue abierta o reconfigura VIGIA_CHART_ID.`
+    );
+  }
+
+  return pages[0]
+    || targets.find((t) => t.type === 'page' && /tradingview/i.test(t.url))
+    || null;
+}
 
 // Known direct API paths discovered via live probing (see PROBE_RESULTS.md)
 const KNOWN_PATHS = {
@@ -71,10 +124,7 @@ export async function connect() {
 async function findChartTarget() {
   const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/list`);
   const targets = await resp.json();
-  // Prefer targets with tradingview.com/chart in the URL
-  return targets.find(t => t.type === 'page' && /tradingview\.com\/chart/i.test(t.url))
-    || targets.find(t => t.type === 'page' && /tradingview/i.test(t.url))
-    || null;
+  return selectChartTarget(targets);
 }
 
 export async function getTargetInfo() {

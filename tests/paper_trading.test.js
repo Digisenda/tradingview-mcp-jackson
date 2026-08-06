@@ -309,6 +309,50 @@ describe("expireStalePositions — closes prior-day positions without overnight 
     assert.equal(expiredCount, 0, "a position opened today should be left for normal OCO/session-end handling");
     assert.ok(loadOpenPositions().find((p) => p.id === "TODAY-TEST-NVDA-CALL"));
   });
+
+  test("sessionEndedToday=true also expires a position opened today (restart after close, watcher never left running)", () => {
+    openPosition({
+      id: "TODAY-CLOSED-TEST-NVDA-CALL",
+      ticker: "NVDA",
+      strategy_id: "STRAT-01",
+      side: "CALL",
+      confidence: "setup_forming",
+      score: 60,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    const rules = { strategies: [{ id: "STRAT-01" }] };
+    const { expiredCount } = expireStalePositions(
+      rules,
+      new Map([["NVDA", 205.00]]),
+      { sessionEndedToday: true }
+    );
+
+    assert.equal(expiredCount, 1, "should expire a same-day position once today's session has closed");
+    assert.equal(loadOpenPositions().find((p) => p.id === "TODAY-CLOSED-TEST-NVDA-CALL"), undefined);
+  });
+
+  test("sessionEndedToday=true still holds an overnight (STRAT-12) position opened today", () => {
+    openPosition({
+      id: "TODAY-OVERNIGHT-TEST-NVDA-STRAT12",
+      ticker: "NVDA",
+      strategy_id: "STRAT-12",
+      side: "CALL",
+      confidence: "conditions_met",
+      score: 80,
+      underlying_entry_price: 200.00,
+      veto_flags: [],
+    });
+    const rules = { strategies: [{ id: "STRAT-12", exit_override: { sell_at_market_open: false } }] };
+    const { expiredCount } = expireStalePositions(
+      rules,
+      new Map([["NVDA", 205.00]]),
+      { sessionEndedToday: true }
+    );
+
+    assert.equal(expiredCount, 0, "overnight strategies should stay open even after today's session closes");
+    assert.ok(loadOpenPositions().find((p) => p.id === "TODAY-OVERNIGHT-TEST-NVDA-STRAT12"));
+  });
 });
 
 // ─── onSignal — enabled flag isolation ───────────────────────────────────────

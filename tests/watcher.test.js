@@ -18,7 +18,7 @@ await mock.module("../src/core/fundamentals.js", {
   },
 });
 
-const { buildVetoFlags, isInSessionWindow, isInWarmupWindow } = await import("../watcher.js");
+const { buildVetoFlags, isInSessionWindow, isInWarmupWindow, isPastSessionWindow } = await import("../watcher.js");
 
 test("buildVetoFlags: FED dentro de ±2 días → incluye flag FED con la fecha", () => {
   const event = { date: "2026-07-03", event: "FOMC", days_away: 1 };
@@ -150,4 +150,24 @@ test("isInWarmupWindow: sigue anclado solo al inicio (09:30), el fin de ventana 
   assert.equal(isInWarmupWindow("09:30–16:00 ET", 5), true);
   t.mock.timers.setTime(etUTC(9, 30)); // ya abrió → warmup termina
   assert.equal(isInWarmupWindow("09:30–16:00 ET", 5), false);
+});
+
+// ─── isPastSessionWindow — usado al reiniciar para saber si expirar posiciones de HOY ──
+
+test("isPastSessionWindow: 16:00 ET (borde de cierre) todavía NO cuenta como cerrada", (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  t.mock.timers.setTime(etUTC(16, 0));
+  assert.equal(isPastSessionWindow("09:30–16:00 ET"), false);
+});
+
+test("isPastSessionWindow: 16:01 ET ya cuenta como sesión cerrada", (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  t.mock.timers.setTime(etUTC(16, 1));
+  assert.equal(isPastSessionWindow("09:30–16:00 ET"), true);
+});
+
+test("isPastSessionWindow: 09:00 ET (premarket) no cuenta como sesión cerrada", (t) => {
+  t.mock.timers.enable({ apis: ["Date"] });
+  t.mock.timers.setTime(etUTC(9, 0));
+  assert.equal(isPastSessionWindow("09:30–16:00 ET"), false);
 });

@@ -164,9 +164,12 @@ export async function onSessionEnd(ticker, lastPrice, rules = null) {
  *
  * @param {object} rules  parsed rules.json — used to look up exit_override per strategy
  * @param {Map<string, number>} priceByTicker  fresh quote per ticker that has a stale position
+ * @param {{ sessionEndedToday?: boolean }} [opts]  when true, also expires positions
+ *   opened TODAY (not just prior days) — for restarts that happen after today's
+ *   session already closed, where onSessionEnd() never got a chance to run either.
  * @returns {{ expiredCount: number, skipped: string[] }}  skipped = position ids left open (no price available)
  */
-export function expireStalePositions(rules, priceByTicker) {
+export function expireStalePositions(rules, priceByTicker, { sessionEndedToday = false } = {}) {
   const positions = loadOpenPositions();
   const today = todayET();
   const strategies = rules?.strategies || [];
@@ -175,7 +178,8 @@ export function expireStalePositions(rules, priceByTicker) {
 
   for (const pos of positions) {
     const posDay = etDateFromISO(pos.opened_at);
-    if (posDay === today) continue; // opened today — leave to normal OCO/session-end handling
+    // Opened today, and today's session hasn't closed yet — leave to normal OCO/session-end handling.
+    if (posDay === today && !sessionEndedToday) continue;
 
     const stratDef = strategies.find((s) => s.id === pos.strategy_id);
     const holdsOvernight = stratDef?.exit_override?.sell_at_market_open === false;
