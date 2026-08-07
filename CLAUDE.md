@@ -73,6 +73,12 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 - `alert_list` → view active alerts
 - `alert_delete` → remove alerts
 
+### "Multiple TradingView tabs open at once"
+- `tab_list` → lists every open chart tab; flags `ambiguous: true` when 2+ tabs are open and none is pinned
+- `chart_pin_tab` → **required** before any other tool call once `tab_list` shows 2+ tabs. Pins the CDP connection to one exact tab by `chart_id` (from `tab_list`), for the rest of the process's life. Call with no `chart_id` to unpin.
+- `chart_get_pin` → reports the currently pinned `chart_id`, if any
+- Since 2026-08-07, `connect()` **fails loudly** (throws, does not fall back to "first tab") whenever 2+ chart tabs are open and no pin is set — this replaced a silent `pages[0]` fallback that caused a real incident: an unpinned interactive session mutated a user's live manual-trading tab (symbol + timeframe + indicators changed) instead of touching a scratch tab. See `src/connection.js` (`selectChartTarget`) and `tests/connection.test.js`. Any skill/workflow driving this MCP with 2+ tabs open must call `tab_list` first and `chart_pin_tab` before touching the chart.
+
 ### "Navigate the UI"
 - `ui_open_panel` → open/close pine-editor, strategy-tester, watchlist, alerts, trading
 - `ui_click` → click buttons by aria-label, text, or data-name

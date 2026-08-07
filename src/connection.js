@@ -55,6 +55,22 @@ export function selectChartTarget(targets, pinnedId = pinnedChartId) {
     );
   }
 
+  // Con 2+ pestañas de chart abiertas y sin pin, NO hay forma fiable de saber cuál es la
+  // "correcta" — adoptar silenciosamente pages[0] fue la causa raíz de mutar/leer la pestaña
+  // de trading manual de otro proceso (ver bug 2026-08-07: momentum-scan mutó una pestaña
+  // manual porque cayó en pages[0] sin pin). Fallar alto en vez de adivinar.
+  if (pages.length > 1) {
+    const available = pages
+      .map((t) => `${extractChartId(t.url) || '?'} (${t.title})`)
+      .join(', ');
+    throw new Error(
+      `${pages.length} pestañas de TradingView abiertas y ninguna anclada — no se puede elegir ` +
+      `una sin ambigüedad. Pestañas disponibles: ${available}. Usa la herramienta chart_pin_tab ` +
+      `con el chart_id de la pestaña correcta antes de continuar (o abre una pestaña nueva ` +
+      `dedicada con tab_new y ánclala).`
+    );
+  }
+
   return pages[0]
     || targets.find((t) => t.type === 'page' && /tradingview/i.test(t.url))
     || null;

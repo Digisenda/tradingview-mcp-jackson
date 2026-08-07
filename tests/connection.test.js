@@ -11,18 +11,31 @@ const manualTSLA = { type: "page", id: "t2", title: "TSLA — TradingView", url:
 const vigiaTab   = { type: "page", id: "t3", title: "NVDA — TradingView", url: "https://www.tradingview.com/chart/CCCC3333/" };
 const nonChartTab = { type: "page", id: "t4", title: "Gmail", url: "https://mail.google.com/" };
 
-describe("selectChartTarget — no pin (backward compatible)", () => {
-  test("single tab: returns it", () => {
+describe("selectChartTarget — no pin", () => {
+  test("single tab: returns it (no ambiguity, no pin needed)", () => {
     const t = selectChartTarget([manualNVDA], null);
     assert.equal(t.id, "t1");
   });
 
-  test("multiple tabs, no pin: returns the first chart tab (legacy behavior)", () => {
-    const t = selectChartTarget([manualNVDA, manualTSLA, vigiaTab], null);
-    assert.equal(t.id, "t1");
+  test("multiple tabs, no pin: throws instead of silently guessing pages[0] (fixed 2026-08-07 — this exact silent fallback mutated a live manual-trading tab from a momentum-scan run)", () => {
+    assert.throws(
+      () => selectChartTarget([manualNVDA, manualTSLA, vigiaTab], null),
+      /ninguna anclada/
+    );
   });
 
-  test("ignores non-chart pages", () => {
+  test("ambiguity error lists the available chart_ids", () => {
+    try {
+      selectChartTarget([manualNVDA, manualTSLA], null);
+      assert.fail("should have thrown");
+    } catch (e) {
+      assert.match(e.message, /AAAA1111/);
+      assert.match(e.message, /BBBB2222/);
+      assert.match(e.message, /chart_pin_tab/);
+    }
+  });
+
+  test("ignores non-chart pages — single remaining chart tab is unambiguous", () => {
     const t = selectChartTarget([nonChartTab, manualTSLA], null);
     assert.equal(t.id, "t2");
   });
@@ -53,13 +66,13 @@ describe("selectChartTarget — pinned by chart_id", () => {
 });
 
 describe("pinToChartId / getPinnedChartId", () => {
-  test("stores and reports the pinned id, and clearing it restores default selection", () => {
+  test("stores and reports the pinned id, and clearing it restores default (throw-on-ambiguity) selection", () => {
     pinToChartId("CCCC3333");
     assert.equal(getPinnedChartId(), "CCCC3333");
     assert.equal(selectChartTarget([manualNVDA, vigiaTab]).id, "t3");
 
     pinToChartId(null);
     assert.equal(getPinnedChartId(), null);
-    assert.equal(selectChartTarget([manualNVDA, vigiaTab]).id, "t1");
+    assert.throws(() => selectChartTarget([manualNVDA, vigiaTab]), /ninguna anclada/);
   });
 });

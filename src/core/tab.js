@@ -2,7 +2,7 @@
  * Core tab management logic.
  * Controls TradingView Desktop tabs via CDP and Electron keyboard shortcuts.
  */
-import { getClient, evaluate } from '../connection.js';
+import { getClient, evaluate, pinToChartId, getPinnedChartId } from '../connection.js';
 
 const CDP_HOST = 'localhost';
 const CDP_PORT = 9222;
@@ -13,18 +13,68 @@ const CDP_PORT = 9222;
 export async function list() {
   const resp = await fetch(`http://${CDP_HOST}:${CDP_PORT}/json/list`);
   const targets = await resp.json();
+  const pinnedId = getPinnedChartId();
 
   const tabs = targets
     .filter(t => t.type === 'page' && /tradingview\.com\/chart/i.test(t.url))
-    .map((t, i) => ({
-      index: i,
-      id: t.id,
-      title: t.title.replace(/^Live stock.*charts on /, ''),
-      url: t.url,
-      chart_id: t.url.match(/\/chart\/([^/?]+)/)?.[1] || null,
-    }));
+    .map((t, i) => {
+      const chart_id = t.url.match(/\/chart\/([^/?]+)/)?.[1] || null;
+      return {
+        index: i,
+        id: t.id,
+        title: t.title.replace(/^Live stock.*charts on /, ''),
+        url: t.url,
+        chart_id,
+        pinned: !!pinnedId && chart_id === pinnedId,
+      };
+    });
 
-  return { success: true, tab_count: tabs.length, tabs };
+  return {
+    success: true,
+    tab_count: tabs.length,
+    pinned_chart_id: pinnedId,
+    ambiguous: tabs.length > 1 && !pinnedId,
+    tabs,
+  };
+}
+
+/**
+ * Pin every subsequent tool call to one exact chart tab by chart_id (the
+ * segment of its TradingView URL, as returned by list()). Pass null/undefined
+ * to unpin.
+ *
+ * Needed as soon as 2+ TradingView chart tabs are open at once (e.g. manual
+ * trading tabs alongside a scan/automation tab) — without a pin, connection.js
+ * throws instead of guessing which tab to drive, since guessing wrong means
+ * silently reading or mutating someone else's live chart (see connection.js
+ * selectChartTarget for the incident this was built to prevent).
+ */
+export async function pinTab({ chart_id } = {}) {
+  const id = chart_id || null;
+  pinToChartId(id);
+
+  if (!id) {
+    return { success: true, action: 'unpinned', pinned_chart_id: null };
+  }
+
+  // Verify the chart_id actually exists among open tabs before reporting success,
+  // and surface the current tab list either way for confirmation.
+  const state = await list();
+  const match = state.tabs.find(t => t.chart_id === id);
+  if (!match) {
+    return {
+      success: false,
+      action: 'pin_set_but_not_found',
+      pinned_chart_id: id,
+      warning: `Se guardó el pin (chart_id=${id}) pero ninguna pestaña abierta lo tiene ahora mismo.`,
+      tabs: state.tabs,
+    };
+  }
+  return { success: true, action: 'pinned', pinned_chart_id: id, tab: match };
+}
+
+export function getPin() {
+  return { success: true, pinned_chart_id: getPinnedChartId() };
 }
 
 /**
