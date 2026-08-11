@@ -24,6 +24,13 @@ const CACHE_DIR = join(homedir(), ".tradingview-mcp");
 const TF_MAP = { D: "1d", "60": "1h", "15": "15m" };
 const tvToYf = (tf) => TF_MAP[tf] ?? tf;
 
+// TradingView index tickers → Yahoo Finance equivalents (Yahoo has no plain
+// "SPX"/"NDX"/"RUT"/"DJI"). Only used for the outbound Yahoo request — the
+// returned/cached `symbol` stays the original TV ticker so callers never see
+// the Yahoo-specific form.
+const YF_INDEX_MAP = { SPX: "^GSPC", NDX: "^NDX", RUT: "^RUT", DJI: "^DJI" };
+export const mapToYahooSymbol = (symbol) => YF_INDEX_MAP[symbol] ?? symbol;
+
 // Yahoo Finance v8 chart API — no library needed (Node 18+ native fetch)
 const YF_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
 
@@ -78,21 +85,29 @@ async function ensureCacheDir() {
  * Fetch OHLCV bars for symbol/tf, with file cache keyed by date.
  * Cache path: ~/.tradingview-mcp/ohlcv-{SYMBOL}-{TF}-{YYYY-MM-DD}.json
  * 500ms delay on real network calls to respect rate limits.
+ *
+ * `bypassCache` (default false — existing callers are unaffected) skips the
+ * same-day cache read for time-sensitive rechecks (e.g. M15 SBV trigger
+ * re-verified later the same day) — see momentum-scan-hibrido-yahoo-cdp.md
+ * risk #4. The fresh result still overwrites the cache file, so a later
+ * non-bypassed call the same day picks up the updated data.
  */
-export async function fetchOHLCV(symbol, tf, days) {
+export async function fetchOHLCV(symbol, tf, days, bypassCache = false) {
   await ensureCacheDir();
   const today = new Date().toISOString().slice(0, 10);
   const yfTF = tvToYf(tf);
   const cacheFile = join(CACHE_DIR, `ohlcv-${symbol}-${yfTF}-${today}.json`);
 
-  // Try cache hit
-  try {
-    const raw = await readFile(cacheFile, "utf8");
-    const cached = JSON.parse(raw);
-    return { ...cached, from_cache: true };
-  } catch (err) {
-    if (err.name === "SyntaxError") {
-      await unlink(cacheFile).catch(() => {});
+  if (!bypassCache) {
+    // Try cache hit
+    try {
+      const raw = await readFile(cacheFile, "utf8");
+      const cached = JSON.parse(raw);
+      return { ...cached, from_cache: true };
+    } catch (err) {
+      if (err.name === "SyntaxError") {
+        await unlink(cacheFile).catch(() => {});
+      }
     }
   }
 
@@ -132,9 +147,10 @@ export async function fetchOHLCV(symbol, tf, days) {
 }
 
 async function _doFetch(symbol, yfTF, from, tvTF) {
+  const yahooSymbol = mapToYahooSymbol(symbol);
   const p1 = Math.floor(from.getTime() / 1000);
   const p2 = Math.floor(Date.now() / 1000);
-  const url = `${YF_BASE}/${encodeURIComponent(symbol)}?period1=${p1}&period2=${p2}&interval=${yfTF}&includePrePost=false&events=div%2Csplit`;
+  const url = `${YF_BASE}/${encodeURIComponent(yahooSymbol)}?period1=${p1}&period2=${p2}&interval=${yfTF}&includePrePost=false&events=div%2Csplit`;
 
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0", Accept: "application/json" },
@@ -265,6 +281,35 @@ export function computeStrat12Context(d1Bars, currentIndex, fedNear = false, ear
   };
 }
 
+/**
+ * Unified per-bar SMA+BB history for the last `count` bars (lookahead-free,
+ * same computation as computeIndicatorsAt but without trendline/ma_order).
+ * Enables verifying BOTH a Bollinger-width sequence (e.g. CF-001) AND an
+ * MA100/MA200 crossover + how long a precondition held (e.g. PC-001) from
+ * the same array — see momentum-scan-hibrido-yahoo-cdp.md T2.
+ */
+export function computeIndicatorsHistoryFromBars(bars, count) {
+  const closes = bars.map((b) => b.close);
+  const start = Math.max(0, bars.length - count);
+  const history = [];
+  for (let i = start; i < bars.length; i++) {
+    const bb = computeBBFromBars(closes, 20, i);
+    const [sma20, sma40, sma100, sma200] = computeSMAsFromBars(closes, [20, 40, 100, 200], i);
+    history.push({
+      date: bars[i].time,
+      sma20,
+      sma40,
+      sma100,
+      sma200,
+      bb_basis: bb?.basis ?? null,
+      bb_upper: bb?.upper ?? null,
+      bb_lower: bb?.lower ?? null,
+      volume: bars[i].volume,
+    });
+  }
+  return history;
+}
+
 // ── Public API ─────────────────────────────────────────────────────────────────
 
 /**
@@ -292,6 +337,50 @@ export async function getIndicators(symbol, timeframe, days) {
     current,
     from_cache: raw.from_cache,
   };
+}
+
+/**
+ * Batch version of getIndicators for N symbols in one call — agnostic of any
+ * strategy/rules logic (no screenStrategies call, unlike screenMultiAsset).
+ * Best-effort: a per-symbol failure is returned as {symbol, error} and does
+ * NOT abort the batch (D1 decision, momentum-scan-hibrido-yahoo-cdp.md T1/T5).
+ * `historyCount`, if set, adds a `history` array per symbol (see T2).
+ * `bypassCache` forces a fresh fetch past the same-day cache (see T4/risk #4).
+ */
+export async function getIndicatorsBatch(symbols, timeframe, historyCount, bypassCache) {
+  const tf = timeframe ?? "D";
+  const results = [];
+  for (const symbol of symbols) {
+    try {
+      const raw = await fetchOHLCV(symbol, tf, historyCount, bypassCache ?? false);
+      if (raw.error) {
+        results.push({ symbol, error: raw.error });
+        continue;
+      }
+
+      const bars = raw.bars;
+      const current = computeIndicatorsAt(bars, bars.length - 1);
+      if (!current) {
+        results.push({ symbol, error: "insufficient_data", bars_fetched: bars.length });
+        continue;
+      }
+
+      const entry = {
+        symbol,
+        timeframe: tf,
+        bars_fetched: bars.length,
+        current,
+        from_cache: raw.from_cache,
+      };
+      if (historyCount) {
+        entry.history = computeIndicatorsHistoryFromBars(bars, historyCount);
+      }
+      results.push(entry);
+    } catch (err) {
+      results.push({ symbol, error: err.message });
+    }
+  }
+  return results;
 }
 
 /**
@@ -483,6 +572,41 @@ export function registerScreenerTools(server) {
     async ({ symbol, timeframe, days }) => {
       try {
         return jsonResult(await getIndicators(symbol, timeframe, days));
+      } catch (err) {
+        return jsonResult({ success: false, error: err.message }, true);
+      }
+    },
+  );
+
+  server.tool(
+    "screener_get_indicators_batch",
+    "Batch version of screener_get_indicators for MULTIPLE symbols in a single MCP round-trip via Yahoo Finance. No TradingView Desktop required, no 300-bar cap. Agnostic of any strategy/rules logic (screenStrategies is NOT applied here) — returns raw current + optional history indicators per symbol; the caller (e.g. rules.yaml) decides what they mean. Best-effort: a per-symbol failure is returned as {symbol, error} without aborting the rest of the batch. Index tickers SPX/NDX/RUT/DJI are auto-mapped to their Yahoo equivalents (^GSPC/^NDX/^RUT/^DJI).",
+    {
+      symbols: z.array(z.string()).describe('List of ticker symbols (e.g. ["AMD", "MU", "SNDK"])'),
+      timeframe: z
+        .string()
+        .optional()
+        .describe('Timeframe: "D" (daily), "60" (1h), "15" (15m). Default: "D"'),
+      history_count: z
+        .number()
+        .optional()
+        .describe(
+          "If set, also returns a `history` array of the last N bars per symbol, each with " +
+            "{date, sma20, sma40, sma100, sma200, bb_basis, bb_upper, bb_lower, volume} — use " +
+            "to locate an exact MA crossover (e.g. PC-001) or a Bollinger width sequence (e.g. CF-001).",
+        ),
+      bypass_cache: z
+        .boolean()
+        .optional()
+        .describe(
+          "Skip the same-day disk cache and force a fresh fetch. Use for time-sensitive " +
+            "rechecks (e.g. M15 SBV trigger re-verified later the same day); leave false/omit " +
+            "for structural D1/H1 scans, which should use the normal same-day cache.",
+        ),
+    },
+    async ({ symbols, timeframe, history_count, bypass_cache }) => {
+      try {
+        return jsonResult(await getIndicatorsBatch(symbols, timeframe, history_count, bypass_cache));
       } catch (err) {
         return jsonResult({ success: false, error: err.message }, true);
       }
