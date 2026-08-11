@@ -126,6 +126,37 @@ These tools can return large payloads. Follow these rules to avoid context bloat
 - OHLCV capped at 500 bars, trades at 20 per request
 - Pine labels capped at 50 per study by default (pass `max_labels` to override)
 
+## Screener Yahoo (`src/digisenda/screener.js`) — smoke test manual
+
+`npm run test:screener` cubre solo las funciones puras (BB/SMA/trendline, sin red).
+`screener_get_indicators_batch` (T1-T4 de `momentum-scan-hibrido-yahoo-cdp.md`, 2026-08-11)
+depende de Yahoo Finance real y NO tiene mock — antes de confiar en un cambio a `screener.js`,
+correr un smoke test manual (no en CI, por diseño — D5 del doc de diseño):
+
+```bash
+node -e "
+import('./src/digisenda/screener.js').then(async (m) => {
+  const res = await m.getIndicatorsBatch(['AMD','MU','NOTAREALTICKERXYZ'], '60', 40, true);
+  for (const r of res) console.log(r.symbol, '| error:', r.error, '| bars:', r.bars_fetched, '| history:', r.history?.length);
+});
+"
+```
+
+Qué verificar en la salida:
+- Un símbolo real (`AMD`, `MU`) devuelve `bars_fetched` > 0 y, si se pasó `history_count`, un
+  array `history` de esa longitud con `sma20/40/100/200`, `bb_basis/upper/lower`, `volume`.
+- Un símbolo inválido (`NOTAREALTICKERXYZ`) devuelve `{symbol, error: "not found"}` **sin** abortar
+  el resto del batch (comportamiento best-effort, D1 del diseño).
+- Los 4 índices (`SPX`, `NDX`, `RUT`, `DJI`) devuelven datos reales sin mapeo manual — internamente
+  se traducen a `^GSPC`/`^NDX`/`^RUT`/`^DJI` (`mapToYahooSymbol` en `screener.js`).
+- `bypass_cache: true` fuerza un fetch fresco (`from_cache: false`) incluso si ya corriste el mismo
+  símbolo/timeframe hoy.
+
+Validado en vivo 2026-08-11 contra AMD/MU/SNDK (paridad con la clasificación manual del escaneo
+2026-08-10: AMD y MU CONFIRMADO, SNDK EN FORMACIÓN) y contra una muestra de ETFs apalancados/
+inversos (`AMDD`, `MUD`, `SNDQ`, `TSLL`, `NVDL`, `SOXL`, `SOXS`, `SPXL`, `SPXS`) + los 4 índices +
+`SOXX` — 14/14 sin error. Detalle completo en `momentum-scan-hibrido-yahoo-cdp.md` (T6-T8).
+
 ## Flujo Premarket Unificado
 
 Migrado a una skill de Claude Code 2026-06-22 — ver `checklist-premarket` en
