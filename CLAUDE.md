@@ -24,6 +24,22 @@ Use `study_filter` parameter to target a specific indicator by name substring (e
 - `data_get_ohlcv` without summary → all bars (use `count` to limit, default 100)
 - `quote_get` → single latest price snapshot
 
+**Known bug (confirmed 2026-08-12, unfixed): `data_get_ohlcv` ignores `chart_scroll_to_date` for any
+date other than today.** `chart_scroll_to_date` reports `success: true` with the correct
+`centered_on` unix timestamp for the requested historical date, but the bars actually returned by
+`data_get_ohlcv` immediately after are from the live/current session, not the requested date —
+confirmed by checking `chart_get_visible_range`, which never changes from today's range even after
+a "successful" scroll to a date up to 29 days in the past. Reproduced on a clean pinned tab
+(TSLA, target `2026-08-05T08:31:00`, 7 days back) — not a 300-bar depth limit (failed identically
+at 2 days back and 29 days back), and not tab-specific (same result across tabs). This extends the
+`data_get_study_values` "always live candle" gotcha already known from `D:\Projects\TRADINGVIEW\CLAUDE.md`
+(2026-07-21) to `data_get_ohlcv` as well — likely the same root cause (both probably read off the
+chart's live subscription instead of the historical bar buffer the scroll repositions). No workaround
+found via CDP tools. `screener_get_indicators` / `_batch` (Yahoo path) is not a substitute for this:
+it rejects `timeframe: "1"` (only `D`/`60`/`15` are accepted), and even at 15m/60m it only returns
+smoothed indicators (SMA/BB/volume) via `history`, never a raw OHLC close per bar — unusable for
+pinpointing the underlying price at a specific historical minute.
+
 ### "Analyze my chart" (full report workflow)
 1. `quote_get` → current price
 2. `data_get_study_values` → all indicator readings
